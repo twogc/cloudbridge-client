@@ -407,13 +407,6 @@ func extractTokenFromInput(input string) string {
 	return input
 }
 
-func getDefaultServerID() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-	}
-	return hostname
-}
 
 func fillDefaults(cfg *types.Config, host string, tenantID string) {
 	// Relay defaults
@@ -499,13 +492,3 @@ func fillDefaults(cfg *types.Config, host string, tenantID string) {
 	}
 }
 
-func getDefaultLogPath() string {
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join("C:", "ProgramData", "cloudbridge-client", "logs", "cloudbridge-client.log")
-	case "darwin":
-		return "/var/log/cloudbridge-client/cloudbridge-client.log"
-	default:
-		return "/var/log/cloudbridge-client/cloudbridge-client.log"
-	}
-}

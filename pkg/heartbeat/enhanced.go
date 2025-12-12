@@ -450,20 +450,6 @@ func (em *EnhancedManager) buildMetadata() map[string]interface{} {
 }
 
 // Override the basic heartbeat loop to use enhanced payload
-func (em *EnhancedManager) heartbeatLoop() {
-	for {
-		select {
-		case <-em.stopChan:
-			return
-		case <-em.ticker.C:
-			if err := em.SendEnhancedHeartbeat(); err != nil {
-				em.handleHeartbeatFailure(err)
-			} else {
-				em.handleHeartbeatSuccess()
-			}
-		}
-	}
-}
 
 // API endpoints for dashboard integration
 const (

@@ -90,7 +90,7 @@ func TestAuthManager_TokenRefresh(t *testing.T) {
 
 	// Token refresh may not be implemented for all auth types
 	// This test verifies token management capabilities
-	validToken, err := manager.ValidateToken("test-token")
+	validToken, _ := manager.ValidateToken("test-token")
 	if validToken == nil {
 		t.Logf("Token validation handled (refresh not available)")
 	}
@@ -134,7 +134,7 @@ func TestAuthManager_ClaimExtraction(t *testing.T) {
 
 	// Test claim extraction (implementation-specific)
 	token := "test-token"
-	validatedToken, err := manager.ValidateToken(token)
+	validatedToken, _ := manager.ValidateToken(token)
 
 	if validatedToken != nil {
 		t.Logf("Claims extracted from token")

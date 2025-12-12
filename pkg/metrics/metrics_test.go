@@ -132,8 +132,9 @@ func TestMetrics_Stop(t *testing.T) {
 
 	// Verify server is stopped
 	time.Sleep(100 * time.Millisecond)
-	_, err = http.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", 19093))
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", 19093))
 	if err == nil {
+		defer resp.Body.Close()
 		t.Error("Expected error accessing stopped server")
 	}
 }

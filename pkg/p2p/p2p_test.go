@@ -408,9 +408,9 @@ func TestContextHandling(t *testing.T) {
 
 	select {
 	case <-ctx.Done():
-		t.Logf("Context cancelled as expected")
+		t.Logf("Context canceled as expected")
 	default:
-		t.Error("Expected context to be cancelled")
+		t.Error("Expected context to be canceled")
 	}
 
 	manager.Stop()
