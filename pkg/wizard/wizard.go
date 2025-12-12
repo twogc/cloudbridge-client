@@ -5,8 +5,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
