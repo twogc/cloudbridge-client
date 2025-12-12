@@ -1,0 +1,152 @@
+# GoReleaser configuration for CloudBridge Client
+# Docs: https://goreleaser.com/
+version: 2
+
+before:
+  hooks:
+    - go mod download
+    - go mod tidy
+
+builds:
+  - id: cloudbridge-client
+    binary: cloudbridge-client
+    main: ./cmd/cloudbridge-client
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - 386         # NOTE: 386 актуален только для linux/windows
+    ignore:         # Явно запрещаем невозможные комбинации
+      - goos: darwin
+        goarch: 386
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildTime={{.Date}}
+      - -X main.commit={{.Commit}}
+
+archives:
+  - id: cloudbridge-client
+    name_template: "cloudbridge-client_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+      - zip
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+      - ./packaging/linux/cloudbridge-client.service
+      - ./packaging/common/install.sh
+      - ./packaging/common/windows-service.md
+      - ./packaging/common/Architecture.md
+      - ./packaging/common/config.yaml
+
+nfpms:
+  # Linux DEB/RPM через nfpm
+  - id: cloudbridge-client-linux
+    package_name: cloudbridge-client
+    vendor: "2GC Dev"
+    homepage: "https://github.com/twogc/cloudbridge-client"
+    maintainer: "2GC Dev <dev@2gc.ru>"
+    description: "CloudBridge Relay Client for secure peer-to-peer corporate networks"
+    license: "MIT"
+    formats: [deb, rpm]
+    bindir: /usr/bin
+
+    # Файлы пакета
+    contents:
+      # systemd unit — в системный путь
+      - src: ./packaging/linux/cloudbridge-client.service
+        dst: /lib/systemd/system/cloudbridge-client.service
+        type: config|noreplace
+        file_info:
+          mode: 0644
+      # Конфиг как обычный файл
+      - src: ./packaging/common/config.yaml
+        dst: /etc/cloudbridge-client/config.yaml
+        type: config|noreplace
+      # Документация
+      - src: ./README.md
+        dst: /usr/share/doc/cloudbridge-client/README.md
+      - src: ./LICENSE
+        dst: /usr/share/doc/cloudbridge-client/LICENSE
+      - src: ./packaging/common/Architecture.md
+        dst: /usr/share/doc/cloudbridge-client/Architecture.md
+      - src: ./packaging/common/install.sh
+        dst: /usr/share/cloudbridge-client/install.sh
+        file_info:
+          mode: 0755
+
+    scripts:
+      # Скрипт должен существовать в репо; можно держать отдельные postinst для DEB/RPM,
+      # но общий bash обычно достаточно
+      postinstall: ./packaging/linux/postinstall.sh
+      preremove: ./packaging/linux/preremove.sh
+
+# macOS packages are available as archives only in OSS version
+# For PKG packages, use GoReleaser Pro or manual creation
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: 2gc-dev
+    name: relay-client
+  name_template: "CloudBridge Client {{ .Version }}"
+  header: |
+    ## CloudBridge Client {{ .Version }}
+
+    This release ships Linux packages (DEB/RPM), macOS PKG, and cross-platform archives (tar.gz/zip).
+
+    ### Packages Included:
+    - **DEB**: Ubuntu/Debian (systemd unit installed)
+    - **RPM**: RHEL/CentOS/Fedora (systemd unit installed)
+    - **Archives**: Linux/macOS/Windows binaries (.tar.gz/.zip)
+
+    ### Supported Platforms:
+    - **Linux**: amd64, arm64, 386 (DEB/RPM packages + archives)
+    - **Windows**: amd64, arm64, 386 (archives only)
+    - **macOS**: amd64, arm64 (archives only)
+
+    ### Quick Install (Linux):
+    ```bash
+    # DEB
+    sudo dpkg -i cloudbridge-client_{{ .Version }}_amd64.deb
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now cloudbridge-client
+
+    # RPM
+    sudo rpm -i cloudbridge-client-{{ .Version }}-1.x86_64.rpm
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now cloudbridge-client
+    ```
+
+  footer: |
+    ## Paths & Config
+    - **Binary (Linux)**: /usr/bin/cloudbridge-client
+    - **Service (Linux)**: /lib/systemd/system/cloudbridge-client.service
+    - **Config (Linux)**: /etc/cloudbridge-client/config.yaml
+    - **Logs (Linux)**: /var/log/cloudbridge-client/
+
+    - **Binary (macOS)**: /usr/local/bin/cloudbridge-client
+    - **Config (macOS)**: /usr/local/etc/cloudbridge-client/config.yaml
+    - **Docs (macOS)**: /usr/local/share/doc/cloudbridge-client/
+
+    ### Restart service (Linux)
+    sudo systemctl restart cloudbridge-client

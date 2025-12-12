@@ -1,0 +1,138 @@
+run:
+  timeout: 10m
+  modules-download-mode: readonly
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gocyclo:
+    min-complexity: 15
+  maligned:
+    suggest-new: true
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  misspell:
+    locale: US
+  lll:
+    line-length: 140
+  unused:
+    check-exported: false
+  unparam:
+    check-exported: false
+  nakedret:
+    max-func-lines: 30
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport # https://github.com/go-critic/go-critic/issues/845
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - gochecknoinits
+    - goprintffuncname
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - rowserrcheck
+    - unconvert
+    - unused
+    - whitespace
+
+issues:
+  exclude-dirs:
+    - vendor
+    - testdata
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gomnd
+        - funlen
+        - gocyclo
+        - goconst
+        - dupl
+        - staticcheck
+        - errcheck
+        - gosec
+        - lll
+        - nolintlint
+    - path: cmd/
+      linters:
+        - gocyclo
+        - funlen
+        - gomnd
+        - gosec
+        - gocritic
+        - errcheck
+        - lll
+        - nolintlint
+    - path: pkg/api/
+      linters:
+        - gosec
+        - errcheck
+        - lll
+    - path: pkg/service/
+      linters:
+        - gosec  # Service files need specific permissions
+        - errcheck
+        - lll
+    - path: pkg/config/
+      linters:
+        - gosec  # TLS config may need InsecureSkipVerify
+    - path: pkg/metrics/
+      linters:
+        - gosec  # Metrics server config
+    - path: pkg/auth/
+      linters:
+        - gocritic  # JWT handling may have specific patterns
+        - lll
+        - nolintlint
+    - path: pkg/relay/
+      linters:
+        - govet  # Shadow variables in complex logic
+        - gosec
+        - errcheck
+        - lll
+        - gocritic
+    - path: pkg/relay/transport/
+      linters:
+        - staticcheck
+        - gosec
+        - errcheck
+        - lll
+    - path: pkg/p2p/
+      linters:
+        - gocritic  # P2P logic may have specific patterns
+    - path: pkg/ice/
+      linters:
+        - errcheck
+    - path: pkg/quic/
+      linters:
+        - errcheck
+        - nolintlint
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option go_package = "github.com/2gc-dev/cloudbridge-client/pkg/relay/transport/proto;proto";
+
+import "google/protobuf/timestamp.proto";
+
+// TunnelService handles tunnel creation and management
+service TunnelService {
+  // CreateTunnel creates a new tunnel
+  rpc CreateTunnel(CreateTunnelRequest) returns (CreateTunnelResponse);
+  
+  // CloseTunnel closes an existing tunnel
+  rpc CloseTunnel(CloseTunnelRequest) returns (CloseTunnelResponse);
+  
+  // ListTunnels lists all active tunnels
+  rpc ListTunnels(ListTunnelsRequest) returns (ListTunnelsResponse);
+  
+  // GetTunnelStatus gets status of a specific tunnel
+  rpc GetTunnelStatus(TunnelStatusRequest) returns (TunnelStatusResponse);
+  
+  // StreamData handles bidirectional data streaming
+  rpc StreamData(stream DataPacket) returns (stream DataPacket);
+}
+
+// CreateTunnelRequest contains tunnel creation parameters
+message CreateTunnelRequest {
+  string tunnel_id = 1;
+  string tenant_id = 2;
+  int32 local_port = 3;
+  string remote_host = 4;
+  int32 remote_port = 5;
+  TunnelConfig config = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+// CreateTunnelResponse contains tunnel creation result
+message CreateTunnelResponse {
+  string status = 1;
+  string tunnel_id = 2;
+  string endpoint = 3;
+  TunnelInfo tunnel_info = 4;
+  string error_message = 5;
+}
+
+// CloseTunnelRequest contains tunnel closure parameters
+message CloseTunnelRequest {
+  string tunnel_id = 1;
+  string tenant_id = 2;
+  bool force = 3;
+}
+
+// CloseTunnelResponse contains tunnel closure result
+message CloseTunnelResponse {
+  string status = 1;
+  string tunnel_id = 2;
+  string error_message = 3;
+}
+
+// ListTunnelsRequest requests list of tunnels
+message ListTunnelsRequest {
+  string tenant_id = 1;
+  string filter = 2;
+}
+
+// ListTunnelsResponse contains list of tunnels
+message ListTunnelsResponse {
+  repeated TunnelInfo tunnels = 1;
+  int32 total_count = 2;
+  string error_message = 3;
+}
+
+// TunnelStatusRequest requests tunnel status
+message TunnelStatusRequest {
+  string tunnel_id = 1;
+  string tenant_id = 2;
+}
+
+// TunnelStatusResponse contains tunnel status
+message TunnelStatusResponse {
+  string status = 1;
+  TunnelInfo tunnel_info = 2;
+  TunnelStats stats = 3;
+  string error_message = 4;
+}
+
+// DataPacket represents a data packet in the tunnel
+message DataPacket {
+  string tunnel_id = 1;
+  bytes data = 2;
+  int64 sequence_number = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  PacketType packet_type = 5;
+}
+
+// TunnelConfig contains tunnel configuration
+message TunnelConfig {
+  int32 buffer_size = 1;
+  int32 max_buffers = 2;
+  int32 timeout_seconds = 3;
+  bool compression_enabled = 4;
+  bool encryption_enabled = 5;
+}
+
+// TunnelInfo contains tunnel information
+message TunnelInfo {
+  string tunnel_id = 1;
+  string tenant_id = 2;
+  int32 local_port = 3;
+  string remote_host = 4;
+  int32 remote_port = 5;
+  string status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp last_activity = 8;
+  TunnelConfig config = 9;
+}
+
+// TunnelStats contains tunnel statistics
+message TunnelStats {
+  int64 bytes_sent = 1;
+  int64 bytes_received = 2;
+  int64 packets_sent = 3;
+  int64 packets_received = 4;
+  int64 errors = 5;
+  google.protobuf.Timestamp last_reset = 6;
+}
+
+// PacketType defines the type of data packet
+enum PacketType {
+  DATA = 0;
+  CONTROL = 1;
+  HEARTBEAT = 2;
+  ERROR = 3;
+}

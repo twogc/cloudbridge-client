@@ -1,0 +1,44 @@
+# Binaries
+cloudbridge-client
+cloudbridge-client-*
+!cloudbridge-client-*.exe
+*.exe
+quic-tester
+example-*
+
+# Examples binaries
+examples/simple-tunnel
+examples/p2p-mesh
+
+# Test outputs
+*.log
+*.out
+
+# Go build cache
+.cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Config files with secrets
+config-local.yaml
+config-prod.yaml
+config-test.yaml
+*.pem
+*.key
+*.crt
+
+# Test scripts output
+test-*.sh.log

@@ -1,0 +1,90 @@
+# CloudBridge Client Configuration
+# This is a template configuration file
+# Copy and modify this file for your specific setup
+
+# Server Configuration
+server:
+  host: "localhost"
+  port: 5552
+  tls_enabled: true
+  insecure_skip_verify: false
+
+# Authentication Configuration
+auth:
+  type: "jwt"  # or "oidc" for OIDC authentication
+  token: "YOUR_JWT_TOKEN_HERE"
+  secret: "YOUR_JWT_SECRET_HERE"
+  skip_validation: false
+  disable_token_validation: false
+
+# OIDC Configuration (if using OIDC authentication)
+oidc:
+  issuer_url: "https://your-oidc-provider.com"
+  audience: "your-audience"
+  jwks_url: "https://your-oidc-provider.com/.well-known/jwks.json"
+
+# P2P Configuration
+p2p:
+  enabled: true
+  interface_name: "cloudbridge0"
+  listen_port: 0  # Auto-assign port
+  mtu: 1420
+
+# ICE Configuration
+ice:
+  stun_servers:
+    - "stun.l.google.com:19302"
+    - "stun1.l.google.com:19302"
+  turn_servers: []
+  ice_servers_timeout: 30
+
+# WebSocket Configuration
+websocket:
+  enabled: true
+  endpoint: "wss://localhost:5552/ws/peers"
+  reconnect_interval: 30
+  max_reconnect_attempts: 10
+
+# API Configuration
+api:
+  base_url: "https://localhost:5552"
+  p2p_api_url: "https://localhost:5552/api"
+  heartbeat_url: "https://localhost:5552/api/v1/tenants/default/peers/register"
+  health_url: "https://localhost:5552/health"
+  metrics_url: "https://localhost:5552/metrics"
+  timeout: 30
+
+# Logging Configuration
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json, text
+  output: "stdout"  # stdout, stderr, file
+  file_path: "cloudbridge-client.log"
+  max_size: 100  # MB
+  max_backups: 3
+  max_age: 28  # days
+
+# Performance Configuration
+performance:
+  connection_pool_size: 10
+  max_concurrent_connections: 100
+  connection_timeout: 30
+  keep_alive_interval: 30
+  retry_attempts: 3
+  retry_delay: 5
+
+# Security Configuration
+security:
+  tls_cert_file: ""
+  tls_key_file: ""
+  tls_ca_file: ""
+  allowed_ciphers: []
+  min_tls_version: "1.2"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  metrics_path: "/metrics"
+  health_check_interval: 30
+  performance_monitoring: true

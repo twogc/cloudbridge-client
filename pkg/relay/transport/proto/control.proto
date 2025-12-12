@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option go_package = "github.com/2gc-dev/cloudbridge-client/pkg/relay/transport/proto;proto";
+
+import "google/protobuf/timestamp.proto";
+
+// ControlService handles authentication and control plane operations
+service ControlService {
+  // Hello performs initial handshake
+  rpc Hello(HelloRequest) returns (HelloResponse);
+  
+  // Authenticate performs JWT authentication
+  rpc Authenticate(AuthRequest) returns (AuthResponse);
+  
+  // GetStatus returns current connection status
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+}
+
+// HelloRequest contains client hello information
+message HelloRequest {
+  string version = 1;
+  repeated string features = 2;
+  string client_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// HelloResponse contains server hello response
+message HelloResponse {
+  string status = 1;
+  string server_version = 2;
+  repeated string supported_features = 3;
+  string session_id = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string error_message = 6;
+}
+
+// AuthRequest contains authentication information
+message AuthRequest {
+  string token = 1;
+  string auth_type = 2;
+  string client_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// AuthResponse contains authentication result
+message AuthResponse {
+  string status = 1;
+  string client_id = 2;
+  string tenant_id = 3;
+  string session_token = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  string error_message = 6;
+}
+
+// StatusRequest requests current status
+message StatusRequest {
+  string client_id = 1;
+}
+
+// StatusResponse contains current status information
+message StatusResponse {
+  string status = 1;
+  bool connected = 2;
+  string transport_mode = 3;
+  google.protobuf.Timestamp last_heartbeat = 4;
+  int64 bytes_sent = 5;
+  int64 bytes_received = 6;
+  string error_message = 7;
+}

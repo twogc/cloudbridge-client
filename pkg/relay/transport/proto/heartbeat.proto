@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option go_package = "github.com/2gc-dev/cloudbridge-client/pkg/relay/transport/proto;proto";
+
+import "google/protobuf/timestamp.proto";
+
+// HeartbeatService handles heartbeat and health monitoring
+service HeartbeatService {
+  // SendHeartbeat sends a heartbeat ping
+  rpc SendHeartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // StreamHeartbeat maintains a streaming heartbeat connection
+  rpc StreamHeartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
+  
+  // GetHealth returns current health status
+  rpc GetHealth(HealthRequest) returns (HealthResponse);
+}
+
+// HeartbeatRequest contains heartbeat information
+message HeartbeatRequest {
+  string client_id = 1;
+  string tenant_id = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  ClientMetrics metrics = 4;
+  string transport_mode = 5;
+}
+
+// HeartbeatResponse contains heartbeat acknowledgment
+message HeartbeatResponse {
+  string status = 1;
+  google.protobuf.Timestamp server_timestamp = 2;
+  int32 interval_seconds = 3;
+  ServerMetrics server_metrics = 4;
+  string error_message = 5;
+}
+
+// HealthRequest requests health status
+message HealthRequest {
+  string client_id = 1;
+  bool include_metrics = 2;
+}
+
+// HealthResponse contains health status
+message HealthResponse {
+  string status = 1;
+  bool healthy = 2;
+  google.protobuf.Timestamp last_heartbeat = 3;
+  int32 uptime_seconds = 4;
+  ClientMetrics client_metrics = 5;
+  ServerMetrics server_metrics = 6;
+  repeated string warnings = 7;
+  string error_message = 8;
+}
+
+// ClientMetrics contains client-side metrics
+message ClientMetrics {
+  int64 bytes_sent = 1;
+  int64 bytes_received = 2;
+  int64 packets_sent = 3;
+  int64 packets_received = 4;
+  int32 active_tunnels = 5;
+  int32 active_p2p_sessions = 6;
+  double cpu_usage = 7;
+  double memory_usage = 8;
+  string transport_mode = 9;
+  google.protobuf.Timestamp last_switch = 10;
+}
+
+// ServerMetrics contains server-side metrics
+message ServerMetrics {
+  int32 connected_clients = 1;
+  int32 active_tunnels = 2;
+  double server_load = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}

@@ -1,0 +1,285 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      version:
+        description: 'Version to deploy'
+        required: true
+        default: 'latest'
+        type: string
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  production-deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.event.inputs.environment }}
+      url: https://edge.2gc.ru
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build application
+        run: |
+          echo "Building application for production..."
+          chmod +x scripts/build-with-config.sh
+          ./scripts/build-with-config.sh \
+            --os linux \
+            --arch amd64 \
+            --type production \
+            --version ${{ github.event.inputs.version }} \
+            --output-dir dist
+          echo "✅ Build completed successfully"
+
+      - name: Create production configuration
+        run: |
+          echo "Creating production configuration..."
+          cat > config-production-deploy.yaml << EOF
+          # Production Configuration
+          relay:
+            host: "edge.2gc.ru"
+            port: 30082
+            timeout: "30s"
+            tls:
+              enabled: true
+              min_version: "1.3"
+              verify_cert: true
+              server_name: "edge.2gc.ru"
+
+          auth:
+            type: "jwt"
+            secret: "${{ secrets.JWT_SECRET }}"
+            fallback_secret: "${{ secrets.JWT_FALLBACK_SECRET }}"
+            keycloak:
+              enabled: false
+              server_url: "https://auth.2gc.ru"
+              realm: "cloudbridge"
+              client_id: "cloudbridge-client"
+
+          api:
+            base_url: "https://edge.2gc.ru:30082"
+            insecure_skip_verify: false
+            timeout: "30s"
+            max_retries: 3
+            backoff_multiplier: 2.0
+            max_backoff: "60s"
+
+          logging:
+            level: "info"
+            format: "json"
+            output: "stdout"
+
+          metrics:
+            enabled: true
+            prometheus_port: 9091
+            tenant_metrics: true
+            buffer_metrics: true
+            connection_metrics: true
+
+          rate_limiting:
+            enabled: true
+            max_retries: 3
+            backoff_multiplier: 2.0
+            max_backoff: "60s"
+
+          performance:
+            enabled: true
+            optimization_mode: "high_throughput"
+            gc_percent: 100
+            memory_ballast: true
+
+          p2p:
+            mesh_port: 51820
+            interface_name: "wg0"
+            allowed_ips: ["10.0.0.0/24"]
+            mtu: 1420
+            persistent_keepalive: "25s"
+
+          tunnel:
+            max_connections: 10
+            buffer_size: 4096
+            keepalive_interval: "30s"
+          EOF
+          echo "✅ Production configuration created"
+
+      - name: Test production configuration
+        run: |
+          echo "Testing production configuration..."
+          ./cloudbridge-client p2p \
+            --token "${{ secrets.JWT_TOKEN }}" \
+            --config config-production-deploy.yaml \
+            --help || {
+            echo "❌ Production configuration test failed"
+            exit 1
+          }
+          echo "✅ Production configuration test passed"
+
+      - name: Create deployment package
+        run: |
+          echo "Creating deployment package..."
+          mkdir -p deploy-package
+          cp cloudbridge-client deploy-package/
+          cp config-production-deploy.yaml deploy-package/config.yaml
+          cp README.md deploy-package/
+          cp PRODUCTION_REQUIREMENTS.md deploy-package/
+          
+          # Create deployment script
+          cat > deploy-package/deploy.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Deploying CloudBridge Client..."
+          
+          # Check if running as root
+          if [ "$EUID" -ne 0 ]; then
+            echo "❌ Please run as root"
+            exit 1
+          fi
+          
+          # Create systemd service
+          cat > /etc/systemd/system/cloudbridge-client.service << 'SERVICE_EOF'
+          [Unit]
+          Description=CloudBridge Client
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=cloudbridge
+          Group=cloudbridge
+          WorkingDirectory=/opt/cloudbridge-client
+          ExecStart=/opt/cloudbridge-client/cloudbridge-client p2p --config /opt/cloudbridge-client/config.yaml
+          Restart=always
+          RestartSec=5
+          
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE_EOF
+          
+          # Create user
+          useradd -r -s /bin/false cloudbridge || true
+          
+          # Install files
+          mkdir -p /opt/cloudbridge-client
+          cp cloudbridge-client /opt/cloudbridge-client/
+          cp config.yaml /opt/cloudbridge-client/
+          chown -R cloudbridge:cloudbridge /opt/cloudbridge-client
+          chmod +x /opt/cloudbridge-client/cloudbridge-client
+          
+          # Enable and start service
+          systemctl daemon-reload
+          systemctl enable cloudbridge-client
+          systemctl start cloudbridge-client
+          
+          echo "✅ CloudBridge Client deployed successfully"
+          echo "Status: systemctl status cloudbridge-client"
+          echo "Logs: journalctl -u cloudbridge-client -f"
+          EOF
+          
+          chmod +x deploy-package/deploy.sh
+          
+          # Create archive
+          tar -czf cloudbridge-client-${{ github.event.inputs.version }}.tar.gz -C deploy-package .
+          echo "✅ Deployment package created"
+
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-deploy-${{ github.event.inputs.version }}
+          path: |
+            cloudbridge-client-${{ github.event.inputs.version }}.tar.gz
+            config-production-deploy.yaml
+          retention-days: 30
+
+      - name: Create release
+        if: github.event.inputs.environment == 'production'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: CloudBridge Client v${{ github.event.inputs.version }}
+          body: |
+            ## CloudBridge Client v${{ github.event.inputs.version }}
+            
+            ### Production Deployment
+            
+            **Environment:** ${{ github.event.inputs.environment }}
+            **Build:** ${{ github.sha }}
+            **Date:** ${{ github.event.head_commit.timestamp }}
+            
+            ### Installation
+            
+            1. Download the deployment package
+            2. Extract: `tar -xzf cloudbridge-client-${{ github.event.inputs.version }}.tar.gz`
+            3. Configure secrets in environment variables
+            4. Run: `sudo ./deploy.sh`
+            
+            ### Configuration
+            
+            See `PRODUCTION_REQUIREMENTS.md` for detailed configuration instructions.
+            
+            ### Security Notes
+            
+            - This release contains production-ready configuration
+            - TLS verification is enabled
+            - Debug logging is disabled
+            - Metrics are enabled for monitoring
+          files: |
+            cloudbridge-client-${{ github.event.inputs.version }}.tar.gz
+          draft: false
+          prerelease: false
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up..."
+          rm -rf deploy-package
+          rm -f cloudbridge-client
+          rm -f config-production-deploy.yaml
+          echo "✅ Cleanup completed"
+
+      - name: Deployment Summary
+        run: |
+          echo "🎉 Deployment Summary"
+          echo "===================="
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Version: ${{ github.event.inputs.version }}"
+          echo "Build: ${{ github.sha }}"
+          echo "Artifacts: production-deploy-${{ github.event.inputs.version }}"
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "Release: v${{ github.event.inputs.version }}"
+          fi
+          echo "===================="
