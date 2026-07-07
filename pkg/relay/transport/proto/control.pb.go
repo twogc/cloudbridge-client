@@ -513,7 +513,7 @@ const file_pkg_relay_transport_proto_control_proto_rawDesc = "" +
 	"\x0eControlService\x128\n" +
 	"\x05Hello\x12\x16.relay.v1.HelloRequest\x1a\x17.relay.v1.HelloResponse\x12=\n" +
 	"\fAuthenticate\x12\x15.relay.v1.AuthRequest\x1a\x16.relay.v1.AuthResponse\x12>\n" +
-	"\tGetStatus\x12\x17.relay.v1.StatusRequest\x1a\x18.relay.v1.StatusResponseBGZEgithub.com/twogc/cloudbridge-client/pkg/relay/transport/proto;protob\x06proto3"
+	"\tGetStatus\x12\x17.relay.v1.StatusRequest\x1a\x18.relay.v1.StatusResponseBGZEgithub.com/2gc-dev/cloudbridge-client/pkg/relay/transport/proto;protob\x06proto3"
 
 var (
 	file_pkg_relay_transport_proto_control_proto_rawDescOnce sync.Once

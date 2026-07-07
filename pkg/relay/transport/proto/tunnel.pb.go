@@ -1051,7 +1051,7 @@ const file_pkg_relay_transport_proto_tunnel_proto_rawDesc = "" +
 	"\vListTunnels\x12\x1c.relay.v1.ListTunnelsRequest\x1a\x1d.relay.v1.ListTunnelsResponse\x12P\n" +
 	"\x0fGetTunnelStatus\x12\x1d.relay.v1.TunnelStatusRequest\x1a\x1e.relay.v1.TunnelStatusResponse\x12<\n" +
 	"\n" +
-	"StreamData\x12\x14.relay.v1.DataPacket\x1a\x14.relay.v1.DataPacket(\x010\x01BGZEgithub.com/twogc/cloudbridge-client/pkg/relay/transport/proto;protob\x06proto3"
+	"StreamData\x12\x14.relay.v1.DataPacket\x1a\x14.relay.v1.DataPacket(\x010\x01BGZEgithub.com/2gc-dev/cloudbridge-client/pkg/relay/transport/proto;protob\x06proto3"
 
 var (
 	file_pkg_relay_transport_proto_tunnel_proto_rawDescOnce sync.Once

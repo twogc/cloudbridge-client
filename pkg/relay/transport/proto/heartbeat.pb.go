@@ -568,7 +568,7 @@ const file_pkg_relay_transport_proto_heartbeat_proto_rawDesc = "" +
 	"\x10HeartbeatService\x12H\n" +
 	"\rSendHeartbeat\x12\x1a.relay.v1.HeartbeatRequest\x1a\x1b.relay.v1.HeartbeatResponse\x12N\n" +
 	"\x0fStreamHeartbeat\x12\x1a.relay.v1.HeartbeatRequest\x1a\x1b.relay.v1.HeartbeatResponse(\x010\x01\x12>\n" +
-	"\tGetHealth\x12\x17.relay.v1.HealthRequest\x1a\x18.relay.v1.HealthResponseBGZEgithub.com/twogc/cloudbridge-client/pkg/relay/transport/proto;protob\x06proto3"
+	"\tGetHealth\x12\x17.relay.v1.HealthRequest\x1a\x18.relay.v1.HealthResponseBGZEgithub.com/2gc-dev/cloudbridge-client/pkg/relay/transport/proto;protob\x06proto3"
 
 var (
 	file_pkg_relay_transport_proto_heartbeat_proto_rawDescOnce sync.Once
