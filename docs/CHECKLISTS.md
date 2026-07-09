@@ -114,9 +114,9 @@ Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
 | JWT register (secret `test-secret`) | PASS — needs `protocol_type=p2p-mesh`, `connection_type=quic`, `p2p_connect` |
 | `GET …/peers` discover | PASS |
 | `PUT …/status` | PASS |
-| `POST …/heartbeat` | FAIL 404 on this build (route not mounted same as register) |
+| `POST …/heartbeat` | PASS (route wired on relay 2026-07-09) |
 | CLI `p2p` register | PASS HTTP 200 (then runs long mesh loop; use timeout) |
-| gRPC :8444 | N/A — disabled in local-smoke config |
+| gRPC :8444 | PASS listen (local-smoke enables grpc, tls off) |
 | Host note | Prometheus already uses TCP **9090**; smoke config moves HTTP API to **19090** |
 
 ### 5.1 L4 reachability

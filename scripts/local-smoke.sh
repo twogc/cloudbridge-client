@@ -70,6 +70,14 @@ curl -sS -m 5 -X PUT "${BASE}/api/v1/tenants/default/peers/${PEER}/status" \
   -d "{\"status\":\"online\",\"relay_session_id\":\"${SID}\"}"
 echo
 
+echo "== heartbeat POST =="
+HB=$(curl -sS -m 5 -X POST "${BASE}/api/v1/tenants/default/peers/${PEER}/heartbeat" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{\"status\":\"online\",\"relay_session_id\":\"${SID}\"}")
+echo "$HB"
+echo "$HB" | grep -q '"success":true' || { echo "heartbeat failed"; exit 1; }
+
 if [[ "${RUN_CLI:-0}" == "1" ]]; then
   if [[ ! -x "$BIN" ]]; then
     echo "building client -> $BIN"
