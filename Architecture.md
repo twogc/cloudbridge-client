@@ -3,6 +3,10 @@
 > **Operational truth:** ports, API contract, and maturity live in  
 > [`docs/CONTRACT_CLIENT_RELAY.md`](docs/CONTRACT_CLIENT_RELAY.md),  
 > [`docs/STATUS.md`](docs/STATUS.md), and [`docs/CHECKLISTS.md`](docs/CHECKLISTS.md).  
+> **Roadmap (Session / PathSelector / failover):**  
+> [`docs/plans/GAP_CLOSURE_AND_IMPROVEMENTS.md`](docs/plans/GAP_CLOSURE_AND_IMPROVEMENTS.md) ·  
+> [`docs/plans/PATH_SELECTION_STATE_MACHINE.md`](docs/plans/PATH_SELECTION_STATE_MACHINE.md) ·  
+> [`docs/plans/README.md`](docs/plans/README.md).  
 > Sections below describe the **intended** architecture. Features such as MASQUE,
 > connection handover, and SLO controllers exist as packages but may be **UNWIRED**
 > in `pkg/relay.Client` — confirm STATUS before treating them as GA.

@@ -14,6 +14,7 @@
 | Unit tests | `pkg/types`, `pkg/config` updated; re-run full suite and record |
 | Live e2e vs current relay | **Not verified** in this snapshot |
 | Enhanced stack (MASQUE, handover, SLO, probes) | Packages exist; **orchestrator sets nil** |
+| Path selection / auto-failover | **Designed, not implemented** — see plans |
 | Docs | **Rebuilt** under `docs/` + openwiki (2026-07-09) |
 
 ## What works in code (implementation present)
@@ -33,16 +34,34 @@
 | ~~gRPC dials relay.port~~ | uses `GRPCTarget()` | WP2 [x] |
 | ~~Hardcoded edge:5553 in p2p~~ | `SetRelayQUICEndpoint` | WP2 [x] |
 | ~~Wizard/onboarding/packaging old ports~~ | fixed WP3 | [x] |
-| REST path drift (discover, connections, ICE) | P1 | WP4 |
-| MASQUE/handover/SLO unwired | P2 | later |
+| REST path drift (discover, connections, ICE) | P1 | WP4 + GAP Phase D |
+| No Session / PathSelector / auto-failover | P1 | GAP Phase A–C |
+| MASQUE/handover/SLO unwired | P2 | GAP Phase F–G |
 | Go 1.25.3 vs installer 1.25.12 | P2 | WP5 |
-| Live smoke not run | P0 ops | CHECKLISTS §5 |
+| ~~Live smoke not run~~ | — | `all-smoke` PASS (L0) |
 
-## Active plan
+## Active plans
 
-See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
+| Plan | Role |
+|------|------|
+| [plans/README.md](plans/README.md) | Index of all plans |
+| [plans/GAP_CLOSURE_AND_IMPROVEMENTS.md](plans/GAP_CLOSURE_AND_IMPROVEMENTS.md) | **Primary roadmap** (phases A–G, improvements) |
+| [plans/PATH_SELECTION_STATE_MACHINE.md](plans/PATH_SELECTION_STATE_MACHINE.md) | Target SM + probe ladder |
+| [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md) | Port/dial WP0–WP5 |
 
-**Now:** Full local baseline green via `scripts/all-smoke.sh` (incl. `p2p --smoke-data`). Next: WP4 REST drift / OIDC smoke.
+### Maturity levels (GAP plan)
+
+| Level | Meaning | State |
+|-------|---------|--------|
+| **L0** Local baseline | `scripts/all-smoke.sh` | **PASS** |
+| L1 Orchestrated MVP | Phase C chaos failover | not started |
+| L2 Control clean | Phase D | not started |
+| L3 NAT-aware | Phase E | not started |
+| L4 Resilient handover | Phase F | not started |
+| L5 Enhanced | Phase G | not started |
+
+**Now:** L0 green. **Next execute:** GAP **Phase A** (`pkg/pathselect` foundation).  
+Do not market above the highest level with green exit criteria.
 
 ## Test log (fill as you run)
 

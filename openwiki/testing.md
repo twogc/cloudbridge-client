@@ -51,6 +51,9 @@ CLI flags:
 - `p2p --smoke` — control-plane membership only  
 - `p2p --smoke-data` — membership + QUIC AUTH + PING/PONG (hard-fail unless `SMOKE_DATA_SOFT=1`)
 
+**Roadmap beyond L0 baseline:** [docs/plans/GAP_CLOSURE_AND_IMPROVEMENTS.md](../docs/plans/GAP_CLOSURE_AND_IMPROVEMENTS.md)  
+**Path-selection design:** [docs/plans/PATH_SELECTION_STATE_MACHINE.md](../docs/plans/PATH_SELECTION_STATE_MACHINE.md)
+
 ## Quality tools
 
 - `.golangci.yml` — run `golangci-lint` when available

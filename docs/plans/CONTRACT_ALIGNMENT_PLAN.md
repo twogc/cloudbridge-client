@@ -3,7 +3,8 @@
 **Project:** `cloudbridge-client`  
 **Created:** 2026-07-09  
 **Owner:** engineering (2GC)  
-**Companion:** [../CONTRACT_CLIENT_RELAY.md](../CONTRACT_CLIENT_RELAY.md) · [../CHECKLISTS.md](../CHECKLISTS.md) · [../STATUS.md](../STATUS.md)
+**Companion:** [../CONTRACT_CLIENT_RELAY.md](../CONTRACT_CLIENT_RELAY.md) · [../CHECKLISTS.md](../CHECKLISTS.md) · [../STATUS.md](../STATUS.md) · [README.md](./README.md)  
+**Connectivity roadmap (after ports):** [GAP_CLOSURE_AND_IMPROVEMENTS.md](./GAP_CLOSURE_AND_IMPROVEMENTS.md)
 
 ## Context
 

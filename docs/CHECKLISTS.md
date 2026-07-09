@@ -2,7 +2,7 @@
 
 Use these when bringing the client back to a testable baseline after long dormancy.
 
-Related: [STATUS.md](STATUS.md) · [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md) · [CONTRACT_CLIENT_RELAY.md](CONTRACT_CLIENT_RELAY.md)
+Related: [STATUS.md](STATUS.md) · [plans/README.md](plans/README.md) · [plans/GAP_CLOSURE_AND_IMPROVEMENTS.md](plans/GAP_CLOSURE_AND_IMPROVEMENTS.md) · [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md) · [CONTRACT_CLIENT_RELAY.md](CONTRACT_CLIENT_RELAY.md)
 
 ---
 
@@ -26,6 +26,8 @@ Related: [STATUS.md](STATUS.md) · [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONT
 - [x] packaging configs match defaults (WP3)
 - [x] root `config.yaml` template aligned
 - [x] wizard / onboarding generate canonical ports
+- [x] Gap-closure + path-selection plans under `docs/plans/` (2026-07-09)
+- [x] `docs/plans/README.md` index + STATUS maturity L0–L5
 
 ---
 
@@ -104,7 +106,9 @@ go test ./pkg/config/ -count=1 -v
 Relay: `cloudbridge-relay-installer/scripts/local-smoke/run-relay.sh start`  
 Client REST: `cloudbridge-client/scripts/local-smoke.sh`  
 Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`  
-**2-peer membership:** `scripts/mesh-smoke-2peer.sh` (uses `p2p --smoke`)
+**2-peer membership:** `scripts/mesh-smoke-2peer.sh` (uses `p2p --smoke`)  
+**One-shot baseline (L0):** `scripts/all-smoke.sh` → `ALL_SMOKE_PASS=1`  
+**Beyond L0 (failover roadmap):** [plans/GAP_CLOSURE_AND_IMPROVEMENTS.md](plans/GAP_CLOSURE_AND_IMPROVEMENTS.md)
 
 **2026-07-09 local results**
 

@@ -8,7 +8,10 @@ Human- and agent-oriented documentation for the client. Prefer **source + this t
 |----------|---------|
 | [openwiki/quickstart.md](../openwiki/quickstart.md) | Repo map, CLI surface, agent entry |
 | [CONTRACT_CLIENT_RELAY.md](CONTRACT_CLIENT_RELAY.md) | **Canonical** client↔relay ports, protocols, paths |
-| [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md) | Patch plan (PR-1…PR-5), status, decisions |
+| [plans/README.md](plans/README.md) | **Plans index** (alignment + gap closure + path SM) |
+| [plans/GAP_CLOSURE_AND_IMPROVEMENTS.md](plans/GAP_CLOSURE_AND_IMPROVEMENTS.md) | **Roadmap:** Session/PathSelector/failover phases A–G |
+| [plans/PATH_SELECTION_STATE_MACHINE.md](plans/PATH_SELECTION_STATE_MACHINE.md) | Target path-selection architecture (diagrams) |
+| [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md) | Port/dial alignment (WP0–WP5), status, decisions |
 | [CHECKLISTS.md](CHECKLISTS.md) | Rebuild, test, smoke, release checklists |
 | [STATUS.md](STATUS.md) | Current maturity snapshot (honest) |
 

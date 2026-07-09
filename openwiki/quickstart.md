@@ -14,7 +14,10 @@ The repository is organized around a Cobra CLI entrypoint, a central relay clien
 |-----|---------|
 | [docs/README.md](../docs/README.md) | Documentation index |
 | [docs/CONTRACT_CLIENT_RELAY.md](../docs/CONTRACT_CLIENT_RELAY.md) | **Canonical** ports/paths vs relay |
-| [docs/plans/CONTRACT_ALIGNMENT_PLAN.md](../docs/plans/CONTRACT_ALIGNMENT_PLAN.md) | Alignment plan + WP checklists |
+| [docs/plans/README.md](../docs/plans/README.md) | **Plans index** |
+| [docs/plans/GAP_CLOSURE_AND_IMPROVEMENTS.md](../docs/plans/GAP_CLOSURE_AND_IMPROVEMENTS.md) | Roadmap: Session / PathSelector / failover |
+| [docs/plans/PATH_SELECTION_STATE_MACHINE.md](../docs/plans/PATH_SELECTION_STATE_MACHINE.md) | Path-selection design diagrams |
+| [docs/plans/CONTRACT_ALIGNMENT_PLAN.md](../docs/plans/CONTRACT_ALIGNMENT_PLAN.md) | Port/dial alignment + WP checklists |
 | [docs/CHECKLISTS.md](../docs/CHECKLISTS.md) | Build / unit / smoke / release |
 | [docs/STATUS.md](../docs/STATUS.md) | Honest maturity snapshot |
 
