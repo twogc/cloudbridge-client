@@ -11,7 +11,7 @@ cd "$ROOT"
 go run ./scripts/grpc-smoke -host 127.0.0.1 -port 8444 -token "$CLOUDBRIDGE_TOKEN" -tunnel -echo-port 18080
 
 echo
-echo "======== full QUIC AUTH smoke ========"
+echo "======== full QUIC AUTH + post-AUTH PING/PONG ========"
 go run ./scripts/quic-smoke -addr 127.0.0.1:5553 -secret "$JWT_SECRET"
 
 echo

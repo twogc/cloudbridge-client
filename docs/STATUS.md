@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** Track A + gRPC tunnel + full QUIC AUTH green. Next: push remotes; optional peer-to-peer data after AUTH.
+**Now:** Track A + gRPC tunnel + full QUIC AUTH + post-AUTH PING/PONG green. Next: optional CLI tunnel e2e / peer-to-peer mesh data.
 
 ## Test log (fill as you run)
 
@@ -61,6 +61,7 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | Track B gRPC Hello/Auth | **OK** | GRPC_SMOKE_PASS=1 :8444 |
 | 2026-07-09 | CreateTunnel + full QUIC AUTH | **OK** | TUNNEL_QUIC_SMOKE_PASS=1 |
 | 2026-07-09 | CreateTunnel **TCP bytes** | **OK** | tunnel_bytes_ok payload echo |
+| 2026-07-09 | QUIC post-AUTH **PING/PONG** | **OK** | second stream after AUTH_OK |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |

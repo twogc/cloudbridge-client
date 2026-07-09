@@ -1,7 +1,9 @@
-// quic-smoke: full P2P QUIC dial to relay :5553 — TLS handshake + AUTH stream + AUTH_OK.
+// quic-smoke: full P2P QUIC dial to relay :5553 —
+// TLS handshake + AUTH stream + AUTH_OK + post-AUTH PING/PONG (data plane).
 // Usage:
 //
 //	JWT_SECRET=test-secret go run ./scripts/quic-smoke -addr 127.0.0.1:5553
+//	JWT_SECRET=test-secret go run ./scripts/quic-smoke -addr 127.0.0.1:5553 -no-payload
 package main
 
 import (
@@ -40,6 +42,8 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:5553", "P2P QUIC UDP address")
 	secret := flag.String("secret", "", "HMAC secret (default JWT_SECRET or test-secret)")
 	timeout := flag.Duration("timeout", 15*time.Second, "overall timeout")
+	noPayload := flag.Bool("no-payload", false, "stop after AUTH_OK (skip PING/PONG)")
+	payload := flag.String("payload", "quic-payload-smoke", "payload after PING ")
 	flag.Parse()
 
 	if *secret == "" {
@@ -77,11 +81,11 @@ func main() {
 	defer conn.CloseWithError(0, "smoke done")
 	log.Printf("QUIC_STEP=dial_ok remote=%s local=%s", conn.RemoteAddr(), conn.LocalAddr())
 
+	// --- AUTH on first stream ---
 	stream, err := conn.OpenStreamSync(ctx)
 	if err != nil {
 		log.Fatalf("QUIC_SMOKE_FAIL open stream: %v", err)
 	}
-	defer stream.Close()
 
 	authMsg := "AUTH " + token
 	if _, err := stream.Write([]byte(authMsg)); err != nil {
@@ -100,7 +104,42 @@ func main() {
 	if resp != "AUTH_OK" {
 		log.Fatalf("QUIC_SMOKE_FAIL expected AUTH_OK got %q", resp)
 	}
+	_ = stream.Close()
 
-	log.Printf("QUIC_SMOKE_PASS=1 addr=%s at=%s", *addr, time.Now().Format(time.RFC3339))
-	fmt.Println("Full QUIC: dial + AUTH_OK OK")
+	if *noPayload {
+		log.Printf("QUIC_SMOKE_PASS=1 addr=%s mode=auth_only at=%s", *addr, time.Now().Format(time.RFC3339))
+		fmt.Println("Full QUIC: dial + AUTH_OK OK")
+		return
+	}
+
+	// --- Post-AUTH data plane: second stream PING → PONG ---
+	// Brief yield so relay finishes auth registration and enters AcceptStream loop.
+	time.Sleep(50 * time.Millisecond)
+
+	dataStream, err := conn.OpenStreamSync(ctx)
+	if err != nil {
+		log.Fatalf("QUIC_SMOKE_FAIL open data stream: %v", err)
+	}
+	defer dataStream.Close()
+
+	pingMsg := "PING " + *payload
+	if _, err := dataStream.Write([]byte(pingMsg)); err != nil {
+		log.Fatalf("QUIC_SMOKE_FAIL write PING: %v", err)
+	}
+	log.Printf("QUIC_STEP=ping_sent %q", pingMsg)
+
+	_ = dataStream.SetReadDeadline(time.Now().Add(8 * time.Second))
+	n, err = dataStream.Read(buf)
+	if err != nil {
+		log.Fatalf("QUIC_SMOKE_FAIL read PONG: %v", err)
+	}
+	pong := string(buf[:n])
+	log.Printf("QUIC_STEP=pong_resp %q", pong)
+	want := "PONG " + *payload
+	if pong != want {
+		log.Fatalf("QUIC_SMOKE_FAIL expected %q got %q", want, pong)
+	}
+
+	log.Printf("QUIC_SMOKE_PASS=1 addr=%s mode=auth+payload at=%s", *addr, time.Now().Format(time.RFC3339))
+	fmt.Println("Full QUIC: dial + AUTH_OK + PING/PONG payload OK")
 }
