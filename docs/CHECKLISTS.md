@@ -99,16 +99,36 @@ go test ./pkg/config/ -count=1 -v
 
 **Prerequisites:** valid JWT or OIDC setup; network to relay; firewall allows ports below.
 
+### 5.0 Local loop (dev host)
+
+Relay: `cloudbridge-relay-installer/scripts/local-smoke/run-relay.sh start`  
+Client REST: `cloudbridge-client/scripts/local-smoke.sh`  
+Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
+
+**2026-07-09 local results**
+
+| Check | Result |
+|-------|--------|
+| Relay start (`config.local-smoke.json`, `-tls=false`) | PASS — :5550 :5551 :5552 :5553 |
+| `GET :5552/health` | PASS |
+| JWT register (secret `test-secret`) | PASS — needs `protocol_type=p2p-mesh`, `connection_type=quic`, `p2p_connect` |
+| `GET …/peers` discover | PASS |
+| `PUT …/status` | PASS |
+| `POST …/heartbeat` | FAIL 404 on this build (route not mounted same as register) |
+| CLI `p2p` register | PASS HTTP 200 (then runs long mesh loop; use timeout) |
+| gRPC :8444 | N/A — disabled in local-smoke config |
+| Host note | Prometheus already uses TCP **9090**; smoke config moves HTTP API to **19090** |
+
 ### 5.1 L4 reachability
 
 | Check | Command / method | Pass |
 |-------|------------------|------|
-| REST health :5552 | `curl -sk https://{relay}:5552/health` | [ ] |
-| HTTP API :9090 | `curl -s http://{relay}:9090/health` (if exposed) | [ ] |
-| gRPC :8444 | `nc -vz {relay} 8444` or grpcurl | [ ] |
-| QUIC UDP :5553 | client p2p log / packet capture | [ ] |
-| STUN :19302 | ICE gather logs | [ ] |
-| TURN :3478 | ICE relay candidate (if needed) | [ ] |
+| REST health :5552 | `curl -sk https://{relay}:5552/health` | [x] local http |
+| HTTP API :9090 | `curl -s http://{relay}:9090/health` (if exposed) | [ ] local uses 19090 / often off |
+| gRPC :8444 | `nc -vz {relay} 8444` or grpcurl | [ ] enable in relay config |
+| QUIC UDP :5553 | client p2p log / packet capture | [~] server listens |
+| STUN :19302 | ICE gather logs | [~] server started |
+| TURN :3478 | ICE relay candidate (if needed) | [~] server started |
 
 ### 5.2 Client CLI
 

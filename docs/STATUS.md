@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** smoke checklist (CHECKLISTS §5) against real/staging relay → then WP4 paths only if 404s.
+**Now:** local smoke baseline recorded (CHECKLISTS §5.0). Next: enable gRPC in local-smoke, fix peer heartbeat mount, optional full CLI mesh; or push commits.
 
 ## Test log (fill as you run)
 
@@ -54,6 +54,8 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | `go test ./... -short` | **partial FAIL** | auth OIDC network — fixed offline mock |
 | 2026-07-09 | `go test ./pkg/auth/ …` after OIDC fix | **OK** | |
 | 2026-07-09 | WP4 path align + build | **OK** | discover/route |
+| 2026-07-09 | Local relay + REST smoke | **OK** | register/discover/status; heartbeat 404 |
+| 2026-07-09 | CLI p2p register against local | **OK** | HTTP 200 then long-run mesh |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |
