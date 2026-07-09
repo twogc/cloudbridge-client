@@ -120,6 +120,7 @@ Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
 | 2-peer mesh-smoke | PASS `MESH_SMOKE_PASS=1` peers≥2 |
 | gRPC :8444 | PASS listen (local-smoke enables grpc, tls off) |
 | Full QUIC data-plane mesh | deferred (soft-fail / skip in --smoke) |
+| **Track B gRPC** `scripts/grpc-smoke.sh` | PASS Connect+Hello+Auth on :8444 |
 | Host note | Prometheus already uses TCP **9090**; smoke config moves HTTP API to **19090** |
 
 ### 5.1 L4 reachability

@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** Track A membership green (`--smoke`, 2-peer). Next optional: QUIC data-plane e2e (not skip), gRPC Hello, or push.
+**Now:** Track A + Track B green locally. Next optional: QUIC data-plane e2e, CreateTunnel gRPC, push remotes.
 
 ## Test log (fill as you run)
 
@@ -58,6 +58,7 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | CLI p2p register against local | **OK** | HTTP 200 then long-run mesh |
 | 2026-07-09 | Heartbeat route + gRPC local-smoke | **OK** | :8444 listen; POST heartbeat 200 |
 | 2026-07-09 | Track A `p2p --smoke` + 2-peer script | **OK** | MESH_SMOKE_PASS=1 |
+| 2026-07-09 | Track B gRPC Hello/Auth | **OK** | GRPC_SMOKE_PASS=1 :8444 |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |
