@@ -121,8 +121,9 @@ Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
 | gRPC :8444 | PASS listen (local-smoke enables grpc, tls off) |
 | Full QUIC multi-peer mesh data | deferred (soft-fail / skip in --smoke) |
 | **Track B gRPC** `scripts/grpc-smoke.sh` / tunnel | PASS Hello+Auth+**CreateTunnel** + TCP bytes |
+| **CLI tunnel e2e** `scripts/cli-tunnel-smoke.sh` | PASS `tunnel --smoke` localPort→relay→remote |
 | **Full QUIC** `scripts/quic-smoke` | PASS dial :5553 + **AUTH_OK** + **PING/PONG** post-AUTH |
-| Combined `scripts/tunnel-quic-smoke.sh` | PASS `TUNNEL_QUIC_SMOKE_PASS=1` (tunnel + payload) |
+| Combined `scripts/tunnel-quic-smoke.sh` | PASS gRPC + **CLI tunnel** + QUIC payload |
 | Host note | Prometheus already uses TCP **9090**; smoke config moves HTTP API to **19090** |
 
 ### 5.1 L4 reachability

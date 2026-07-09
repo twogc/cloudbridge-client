@@ -468,12 +468,23 @@ func (c *Client) CreateTunnel(tunnelID string, localPort int, remoteHost string,
 			"remote_host", remoteHost,
 			"remote_port", remotePort)
 
-		if err := c.transportAdapter.CreateTunnel(tunnelID, c.tenantID, localPort, remoteHost, remotePort); err != nil {
+		// Ask relay for an ephemeral TCP listen port (0) so it does not collide with
+		// the client-side local bind. Relay returns endpoint; client proxies localPort → endpoint.
+		endpoint, err := c.transportAdapter.CreateTunnel(tunnelID, c.tenantID, 0, remoteHost, remotePort)
+		if err != nil {
 			return fmt.Errorf("failed to create tunnel via transport adapter: %w", err)
 		}
+		if endpoint == "" {
+			return fmt.Errorf("CreateTunnel returned empty endpoint")
+		}
 
-		// Register tunnel with tunnel manager
-		if err := c.tunnelManager.RegisterTunnel(tunnelID, localPort, remoteHost, remotePort); err != nil {
+		c.logger.Info("Relay tunnel endpoint ready",
+			"tunnel_id", tunnelID,
+			"endpoint", endpoint,
+			"local_port", localPort)
+
+		// Local listen on user port; hop through relay endpoint to remote.
+		if err := c.tunnelManager.RegisterTunnelWithEndpoint(tunnelID, localPort, remoteHost, remotePort, endpoint); err != nil {
 			return fmt.Errorf("failed to register tunnel: %w", err)
 		}
 

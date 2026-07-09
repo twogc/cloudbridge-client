@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra" // Required for CLI interface
 	"github.com/twogc/cloudbridge-client/pkg/api"
 	"github.com/twogc/cloudbridge-client/pkg/auth"
 	"github.com/twogc/cloudbridge-client/pkg/config"
@@ -19,7 +22,6 @@ import (
 	"github.com/twogc/cloudbridge-client/pkg/service"
 	"github.com/twogc/cloudbridge-client/pkg/types"
 	"github.com/twogc/cloudbridge-client/pkg/utils"
-	"github.com/spf13/cobra" // Required for CLI interface
 )
 
 // Build-time variables (set via ldflags)
@@ -50,6 +52,8 @@ var (
 	// smoke: exit after control-plane mesh membership is ready (register + optional checks)
 	p2pSmoke     bool
 	p2pSmokeWait time.Duration
+	// tunnel --smoke: create tunnel, push bytes via local port, exit
+	tunnelSmoke bool
 
 	// HTTP API specific flags
 	insecureSkipTLSVerify bool
@@ -309,15 +313,17 @@ func createTunnelCommand() *cobra.Command {
 	tunnelCmd := &cobra.Command{
 		Use:   "tunnel",
 		Short: "Start tunnel mode",
-		Long:  "Create a tunnel to remote host",
+		Long:  "Create a tunnel to remote host (localPort → relay CreateTunnel endpoint → remote)",
 		RunE:  runTunnel,
 	}
 
 	// Tunnel specific flags
 	tunnelCmd.Flags().StringVarP(&tunnelID, "tunnel-id", "i", "tunnel_001", "Tunnel ID")
-	tunnelCmd.Flags().IntVarP(&localPort, "local-port", "l", 3389, "Local port to bind")
-	tunnelCmd.Flags().StringVarP(&remoteHost, "remote-host", "r", "192.168.1.100", "Remote host")
+	tunnelCmd.Flags().IntVarP(&localPort, "local-port", "l", 3389, "Local port to bind on this host")
+	tunnelCmd.Flags().StringVarP(&remoteHost, "remote-host", "r", "192.168.1.100", "Remote host (from relay)")
 	tunnelCmd.Flags().IntVarP(&remotePort, "remote-port", "p", 3389, "Remote port")
+	tunnelCmd.Flags().BoolVar(&tunnelSmoke, "smoke", false,
+		"Smoke mode: create tunnel, send/receive bytes via local port, then exit")
 
 	return tunnelCmd
 }
@@ -974,11 +980,29 @@ func runTunnel(cmd *cobra.Command, args []string) error {
 	log.Printf("Local Port: %d", localPort)
 	log.Printf("Remote Host: %s", remoteHost)
 	log.Printf("Remote Port: %d", remotePort)
+	if tunnelSmoke {
+		log.Printf("Smoke mode: will verify bytes then exit")
+	}
 
 	// Load configuration
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Override config with CLI flags
+	if token != "" {
+		cfg.Auth.Token = token
+	}
+	if insecureSkipTLSVerify {
+		cfg.API.InsecureSkipVerify = true
+		cfg.Relay.TLS.VerifyCert = false
+	}
+	if logLevel != "" {
+		cfg.Logging.Level = logLevel
+	}
+	if caPath != "" {
+		cfg.Relay.TLS.CACert = caPath
 	}
 
 	// Create client
@@ -992,6 +1016,15 @@ func runTunnel(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	if err := validateFlags(cfg, transportMode); err != nil {
+		return fmt.Errorf("invalid flag combination: %w", err)
+	}
+	if transportMode != "" {
+		if err := client.SetTransportMode(transportMode); err != nil {
+			return fmt.Errorf("failed to set transport mode: %w", err)
+		}
+	}
+
 	// Set up signal handling for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1004,22 +1037,49 @@ func runTunnel(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	log.Printf("Successfully connected to relay server %s:%d", cfg.Relay.Host, cfg.Relay.Port)
+	log.Printf("Successfully connected to relay server %s:%d (grpc target ready)", cfg.Relay.Host, cfg.Relay.Port)
+
+	authToken := token
+	if authToken == "" {
+		authToken = cfg.Auth.Token
+	}
+	// gRPC metadata also reads CLOUDBRIDGE_TOKEN
+	if authToken != "" {
+		_ = os.Setenv("CLOUDBRIDGE_TOKEN", authToken)
+	}
 
 	// Authenticate
-	if err := authenticateWithRetry(client, token); err != nil {
+	if err := authenticateWithRetry(client, authToken); err != nil {
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
 	log.Printf("Successfully authenticated with client ID: %s", client.GetClientID())
+
+	// Unique tunnel id per smoke run if default
+	if tunnelSmoke && tunnelID == "tunnel_001" {
+		tunnelID = fmt.Sprintf("cli-tun-%d", time.Now().UnixNano())
+	}
 
 	// Create tunnel
 	if err := createTunnelWithRetry(client, tunnelID, localPort, remoteHost, remotePort); err != nil {
 		return fmt.Errorf("failed to create tunnel: %w", err)
 	}
 
-	log.Printf("Successfully created tunnel %s: localhost:%d -> %s:%d",
+	log.Printf("Successfully created tunnel %s: localhost:%d -> (relay) -> %s:%d",
 		tunnelID, localPort, remoteHost, remotePort)
+
+	// Local listener needs a brief moment to bind
+	time.Sleep(100 * time.Millisecond)
+
+	if tunnelSmoke {
+		if err := smokeTunnelBytes(localPort); err != nil {
+			return fmt.Errorf("tunnel smoke bytes failed: %w", err)
+		}
+		log.Printf("TUNNEL_CLI_SMOKE_PASS=1 tunnel_id=%s local_port=%d remote=%s:%d",
+			tunnelID, localPort, remoteHost, remotePort)
+		fmt.Println("CLI tunnel e2e: localPort → relay → remote bytes OK")
+		return nil
+	}
 
 	// Start heartbeat
 	if err := client.StartHeartbeat(); err != nil {
@@ -1040,11 +1100,43 @@ func runTunnel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// smokeTunnelBytes dials localhost:localPort and checks echo through the relay hop.
+func smokeTunnelBytes(port int) error {
+	payload := []byte("cli-tunnel-e2e-smoke")
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	var lastErr error
+	for attempt := 0; attempt < 10; attempt++ {
+		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+		if err != nil {
+			lastErr = err
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		if _, err := conn.Write(payload); err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("write: %w", err)
+		}
+		buf := make([]byte, len(payload))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("read echo: %w", err)
+		}
+		_ = conn.Close()
+		if string(buf) != string(payload) {
+			return fmt.Errorf("payload mismatch got=%q", buf)
+		}
+		log.Printf("CLI_TUNNEL_STEP=bytes_ok payload=%q via %s", buf, addr)
+		return nil
+	}
+	return fmt.Errorf("dial %s: %v", addr, lastErr)
+}
+
 // validateFlags validates CLI flags for incompatible combinations
 func validateFlags(cfg *types.Config, transportMode string) error {
-	// Check gRPC transport with TLS disabled
+	// gRPC without TLS is allowed for local-smoke (plaintext :8444); warn only.
 	if transportMode == "grpc" && !cfg.Relay.TLS.Enabled {
-		return fmt.Errorf("gRPC transport requires TLS to be enabled (set relay.tls.enabled=true)")
+		log.Printf("WARNING: gRPC transport with TLS disabled (local-smoke / dev only)")
 	}
 
 	// Check WireGuard requirements

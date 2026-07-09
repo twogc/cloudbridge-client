@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** Track A + gRPC tunnel + full QUIC AUTH + post-AUTH PING/PONG green. Next: optional CLI tunnel e2e / peer-to-peer mesh data.
+**Now:** Track A + gRPC/CLI tunnel + full QUIC AUTH + post-AUTH PING/PONG green. Next: multi-peer QUIC data / tighter p2p --smoke.
 
 ## Test log (fill as you run)
 
@@ -62,6 +62,7 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | CreateTunnel + full QUIC AUTH | **OK** | TUNNEL_QUIC_SMOKE_PASS=1 |
 | 2026-07-09 | CreateTunnel **TCP bytes** | **OK** | tunnel_bytes_ok payload echo |
 | 2026-07-09 | QUIC post-AUTH **PING/PONG** | **OK** | second stream after AUTH_OK |
+| 2026-07-09 | **CLI tunnel e2e** `tunnel --smoke` | **OK** | localPort → relay endpoint → remote |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |

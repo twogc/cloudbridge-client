@@ -93,15 +93,15 @@ func (ta *TransportAdapter) Authenticate(token string) (clientID, tenantID strin
 	return result.ClientID, result.TenantID, nil
 }
 
-// CreateTunnel creates a tunnel
-func (ta *TransportAdapter) CreateTunnel(tunnelID, tenantID string, localPort int, remoteHost string, remotePort int) error {
+// CreateTunnel creates a tunnel via control plane and returns the data-plane endpoint (host:port).
+func (ta *TransportAdapter) CreateTunnel(tunnelID, tenantID string, localPort int, remoteHost string, remotePort int) (string, error) {
 	result, err := ta.transportManager.CreateTunnel(tunnelID, tenantID, localPort, remoteHost, remotePort)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if result.Status != "ok" {
-		return fmt.Errorf("tunnel creation failed: %s", result.ErrorMessage)
+		return "", fmt.Errorf("tunnel creation failed: %s", result.ErrorMessage)
 	}
 
 	ta.logger.Info("Tunnel created via transport",
@@ -109,7 +109,7 @@ func (ta *TransportAdapter) CreateTunnel(tunnelID, tenantID string, localPort in
 		"tunnel_id", result.TunnelID,
 		"endpoint", result.Endpoint)
 
-	return nil
+	return result.Endpoint, nil
 }
 
 // SendHeartbeat sends a heartbeat

@@ -65,12 +65,16 @@ type Tunnel struct {
 	LocalPort  int
 	RemoteHost string
 	RemotePort int
-	Active     bool
-	CreatedAt  time.Time
-	LastUsed   time.Time
-	BufferMgr  *BufferManager
-	Stats      *TunnelStats
-	mu         sync.RWMutex // Mutex for Active field
+	// RelayEndpoint is host:port of the relay-side TCP listener returned by CreateTunnel.
+	// When set, local accept()s are dialed there (relay proxies to RemoteHost:RemotePort).
+	// When empty, dials RemoteHost:RemotePort directly (legacy / no control-plane endpoint).
+	RelayEndpoint string
+	Active        bool
+	CreatedAt     time.Time
+	LastUsed      time.Time
+	BufferMgr     *BufferManager
+	Stats         *TunnelStats
+	mu            sync.RWMutex // Mutex for Active field
 }
 
 // IsActive safely checks if tunnel is active
@@ -156,8 +160,14 @@ func NewManager(client interfaces.ClientInterface) *Manager {
 	}
 }
 
-// RegisterTunnel registers a new tunnel
+// RegisterTunnel registers a new tunnel (legacy direct dial to remote).
 func (m *Manager) RegisterTunnel(tunnelID string, localPort int, remoteHost string, remotePort int) error {
+	return m.RegisterTunnelWithEndpoint(tunnelID, localPort, remoteHost, remotePort, "")
+}
+
+// RegisterTunnelWithEndpoint registers a local TCP listener that forwards to relayEndpoint
+// (preferred after gRPC CreateTunnel). If relayEndpoint is empty, dials remoteHost:remotePort.
+func (m *Manager) RegisterTunnelWithEndpoint(tunnelID string, localPort int, remoteHost string, remotePort int, relayEndpoint string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -173,14 +183,15 @@ func (m *Manager) RegisterTunnel(tunnelID string, localPort int, remoteHost stri
 
 	// Create tunnel
 	tunnel := &Tunnel{
-		ID:         tunnelID,
-		LocalPort:  localPort,
-		RemoteHost: remoteHost,
-		RemotePort: remotePort,
-		CreatedAt:  time.Now(),
-		LastUsed:   time.Now(),
-		BufferMgr:  NewBufferManager(4096, 100),
-		Stats:      NewTunnelStats(),
+		ID:            tunnelID,
+		LocalPort:     localPort,
+		RemoteHost:    remoteHost,
+		RemotePort:    remotePort,
+		RelayEndpoint: relayEndpoint,
+		CreatedAt:     time.Now(),
+		LastUsed:      time.Now(),
+		BufferMgr:     NewBufferManager(4096, 100),
+		Stats:         NewTunnelStats(),
 	}
 	tunnel.SetActive(true)
 
@@ -290,8 +301,13 @@ func (m *Manager) startTunnelProxy(tunnel *Tunnel) {
 		}
 	}()
 
-	fmt.Printf("Tunnel %s started: localhost:%d -> %s:%d\n",
-		tunnel.ID, tunnel.LocalPort, tunnel.RemoteHost, tunnel.RemotePort)
+	if tunnel.RelayEndpoint != "" {
+		fmt.Printf("Tunnel %s started: localhost:%d -> relay %s -> %s:%d\n",
+			tunnel.ID, tunnel.LocalPort, tunnel.RelayEndpoint, tunnel.RemoteHost, tunnel.RemotePort)
+	} else {
+		fmt.Printf("Tunnel %s started: localhost:%d -> %s:%d (direct)\n",
+			tunnel.ID, tunnel.LocalPort, tunnel.RemoteHost, tunnel.RemotePort)
+	}
 
 	for tunnel.IsActive() {
 		// Accept local connection
@@ -321,10 +337,14 @@ func (m *Manager) handleTunnelConnection(tunnel *Tunnel, localConn net.Conn) {
 	tunnel.Stats.IncrementConnections()
 	defer tunnel.Stats.DecrementConnections()
 
-	// Connect to remote host
-	remoteConn, err := net.Dial("tcp", net.JoinHostPort(tunnel.RemoteHost, strconv.Itoa(tunnel.RemotePort)))
+	// Prefer relay CreateTunnel endpoint; fall back to direct remote dial.
+	target := net.JoinHostPort(tunnel.RemoteHost, strconv.Itoa(tunnel.RemotePort))
+	if tunnel.RelayEndpoint != "" {
+		target = tunnel.RelayEndpoint
+	}
+	remoteConn, err := net.Dial("tcp", target)
 	if err != nil {
-		fmt.Printf("Failed to connect to remote host for tunnel %s: %v\n", tunnel.ID, err)
+		fmt.Printf("Failed to dial hop %s for tunnel %s: %v\n", target, tunnel.ID, err)
 		return
 	}
 	defer func() {
