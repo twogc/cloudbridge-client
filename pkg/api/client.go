@@ -267,6 +267,10 @@ func (c *Client) doRequestWithRetry(ctx context.Context, method, url, token stri
 		}
 
 		lastErr = err
+		// Do not retry client/validation errors (4xx) — saves smoke time on /relay/route schema mismatch
+		if strings.Contains(err.Error(), "HTTP 4") {
+			return nil, err
+		}
 		c.logger.Warn("Request failed, will retry", "attempt", attempt+1, "error", err)
 	}
 

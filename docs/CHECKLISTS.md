@@ -103,7 +103,8 @@ go test ./pkg/config/ -count=1 -v
 
 Relay: `cloudbridge-relay-installer/scripts/local-smoke/run-relay.sh start`  
 Client REST: `cloudbridge-client/scripts/local-smoke.sh`  
-Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
+Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`  
+**2-peer membership:** `scripts/mesh-smoke-2peer.sh` (uses `p2p --smoke`)
 
 **2026-07-09 local results**
 

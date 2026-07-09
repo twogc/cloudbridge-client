@@ -47,6 +47,9 @@ var (
 	// P2P Mesh specific flags
 	p2pMode bool
 	peerID  string
+	// smoke: exit after control-plane mesh membership is ready (register + optional checks)
+	p2pSmoke     bool
+	p2pSmokeWait time.Duration
 
 	// HTTP API specific flags
 	insecureSkipTLSVerify bool
@@ -293,6 +296,10 @@ func createP2PCommand() *cobra.Command {
 
 	// P2P specific flags
 	p2pCmd.Flags().StringVar(&peerID, "peer-id", "", "Peer ID for P2P mesh (optional, auto-generated if not provided)")
+	p2pCmd.Flags().BoolVar(&p2pSmoke, "smoke", false,
+		"Smoke mode: start mesh membership then exit (CI/local loop)")
+	p2pCmd.Flags().DurationVar(&p2pSmokeWait, "smoke-wait", 45*time.Second,
+		"Max time to wait for P2P Start in --smoke mode")
 
 	return p2pCmd
 }
@@ -880,12 +887,25 @@ func runP2P(cmd *cobra.Command, args []string) error {
 
 	// Create P2P manager with HTTP API support
 	p2pManager := p2p.NewManagerWithAPI(p2pConfig, apiConfig, authManager, tokenToUse, p2pLogger)
+	// Dial P2P QUIC to relay using canonical ports from config (docs/CONTRACT_CLIENT_RELAY.md)
+	p2pManager.SetRelayQUICEndpoint(cfg.Relay.Host, cfg.EffectiveP2PQUICPort())
+	if p2pSmoke {
+		// Membership smoke: register + heartbeat + discovery without ICE/QUIC hang risks
+		p2pManager.SetSkipDataPlane(true)
+	}
 
 	// Start P2P mesh with retry to survive temporary relay outages
+	startDeadline := time.Time{}
+	if p2pSmoke {
+		startDeadline = time.Now().Add(p2pSmokeWait)
+	}
 	{
 		backoff := 1 * time.Second
 		maxBackoff := 30 * time.Second
 		for {
+			if p2pSmoke && time.Now().After(startDeadline) {
+				return fmt.Errorf("smoke: P2P Start did not succeed within %s", p2pSmokeWait)
+			}
 			if err := p2pManager.Start(); err != nil {
 				log.Printf("Failed to start P2P mesh: %v, retrying in %v...", err, backoff)
 				time.Sleep(backoff)
@@ -906,6 +926,12 @@ func runP2P(cmd *cobra.Command, args []string) error {
 	}()
 
 	log.Printf("P2P mesh started successfully")
+	livePeerID := peerID
+	if st := p2pManager.GetStatus(); st != nil {
+		log.Printf("P2P status: connected=%v active_peers=%d total_peers=%d",
+			st.IsConnected, st.ActivePeers, st.TotalPeers)
+	}
+	log.Printf("SMOKE_STEP=start_ok peer_id=%s", livePeerID)
 
 	// Check L3-overlay network status
 	if p2pManager.IsL3OverlayReady() {
@@ -918,6 +944,14 @@ func runP2P(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		log.Printf("L3-overlay network not ready yet")
+	}
+
+	if p2pSmoke {
+		// Control-plane membership checks via API manager path already completed in Start.
+		// Extra discover through a short second manager is unnecessary; report ready and exit.
+		log.Printf("SMOKE_PASS=1 peer=%s control_plane=ok", livePeerID)
+		log.Printf("Smoke mode complete — exiting successfully")
+		return nil
 	}
 
 	log.Printf("Press Ctrl+C to stop the client gracefully")

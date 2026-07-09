@@ -83,78 +83,78 @@ func NewManager(cfg *ManagerConfig, authManager *auth.AuthManager, logger Logger
 	}
 }
 
-// Start starts the API manager
+// Start starts the API manager (register + heartbeats).
+// Mutex is not held across network I/O.
 func (m *Manager) Start() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if m.running {
+		m.mu.Unlock()
 		return fmt.Errorf("manager is already running")
 	}
-
-	// Initialize start time for uptime calculation
 	m.startTime = time.Now()
+	m.mu.Unlock()
 
-	// Register peer first
+	// Register peer first (network I/O, no lock)
 	if err := m.registerPeer(); err != nil {
 		return fmt.Errorf("failed to register peer: %w", err)
 	}
 
-	// Notify relay about opened logical connection (monitoring)
+	// Monitoring open is best-effort; /relay/route schema differs from ConnectionRequest.
+	m.mu.Lock()
 	m.sessionID = fmt.Sprintf("sess_%d", time.Now().UnixNano())
-	m.logger.Debug("Opening relay connection for monitoring", "tenant_id", m.tenantID, "peer_id", m.peerID, "session_id", m.sessionID)
+	sessionID := m.sessionID
+	tenantID := m.tenantID
+	peerID := m.peerID
+	token := m.token
+	m.mu.Unlock()
+
+	m.logger.Debug("Opening relay connection for monitoring", "tenant_id", tenantID, "peer_id", peerID, "session_id", sessionID)
 	openReq := &ConnectionRequest{
-		TenantID:  m.tenantID,
-		PeerID:    m.peerID, // This is now set by registerPeer()
-		SessionID: m.sessionID,
+		TenantID:  tenantID,
+		PeerID:    peerID,
+		SessionID: sessionID,
 		Protocol:  "tcp",
-		Meta: map[string]interface{}{
-			"remote_host": "", // unknown at this layer
-			"remote_port": 0,
-		},
+		Meta:      map[string]interface{}{},
 	}
-	if err := m.client.OpenConnection(m.ctx, m.token, openReq); err != nil {
+	if err := m.client.OpenConnection(m.ctx, token, openReq); err != nil {
 		m.logger.Warn("Failed to open relay connection for monitoring", "error", err)
 	} else {
-		m.logger.Info("Successfully opened relay connection for monitoring", "session_id", m.sessionID)
+		m.logger.Info("Successfully opened relay connection for monitoring", "session_id", sessionID)
 	}
 
-	// Start heartbeat
+	// Start peer heartbeat (uses …/peers/:id/heartbeat)
 	go m.startHeartbeat()
 
-	// Start connection heartbeat to relay status (every 20-30s)
-	// Protect against artifacts from previous runs
+	m.mu.Lock()
 	if m.hbStopCh != nil {
-		close(m.hbStopCh)
-		m.hbStopCh = nil
+		// replace channel; do not close under concurrent reader without care
+		prev := m.hbStopCh
+		m.hbStopCh = make(chan struct{})
+		close(prev)
+	} else {
+		m.hbStopCh = make(chan struct{})
 	}
-	m.hbStopCh = make(chan struct{})
-	go func(sessionID string) {
+	stopCh := m.hbStopCh
+	m.running = true
+	m.mu.Unlock()
+
+	// Deprecated connections/heartbeat path — log only, non-blocking interval
+	go func(sessionID string, stop <-chan struct{}) {
 		ticker := time.NewTicker(25 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-m.ctx.Done():
 				return
-			case <-m.hbStopCh:
+			case <-stop:
 				return
 			case <-ticker.C:
-				req := &HeartbeatRequest{
-					Status:         "active",
-					RelaySessionID: sessionID,
-				}
-				if err := m.client.HeartbeatConnection(m.ctx, m.token, req); err != nil {
-					m.logger.Warn("Heartbeat to relay failed", "error", err)
-				} else {
-					m.logger.Debug("Heartbeat to relay sent")
-				}
+				// Peer heartbeat is handled by startHeartbeat; skip legacy connections API.
 			}
 		}
-	}(m.sessionID)
+	}(sessionID, stopCh)
 
-	m.running = true
-	m.logger.Info("API manager started", "tenant_id", m.tenantID, "peer_id", m.peerID)
-
+	m.logger.Info("API manager started", "tenant_id", tenantID, "peer_id", peerID)
 	return nil
 }
 
@@ -260,10 +260,10 @@ func (m *Manager) registerPeer() error {
 		publicKey = fmt.Sprintf("generated-quic-key-%d", time.Now().UnixNano())
 	}
 
-	// Use allowed IPs from token or default
+	// Use allowed IPs from token or default (RFC1918; matches relay IP validator)
 	allowedIPs := quicConfig.AllowedIPs
 	if len(allowedIPs) == 0 {
-		allowedIPs = []string{"10.0.0.0/24"}
+		allowedIPs = []string{"10.200.0.0/24"}
 	}
 
 	// Create simplified registration request

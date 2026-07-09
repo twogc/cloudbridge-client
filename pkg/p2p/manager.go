@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -43,6 +44,8 @@ type Manager struct {
 	// Relay QUIC dial target (from types.Config / CONTRACT_CLIENT_RELAY)
 	relayHost     string
 	relayQUICPort int
+	// skipDataPlane: control-plane only (register/discover/heartbeat) — used by --smoke
+	skipDataPlane bool
 	// L3-overlay network fields
 	peerIP          string
 	tenantCIDR      string
@@ -134,94 +137,102 @@ func NewManagerWithAPI(config *P2PConfig, apiConfig *api.ManagerConfig,
 	}
 }
 
-// Start initializes and starts the P2P manager
+// Start initializes and starts the P2P manager.
+// Network I/O is intentionally outside the main mutex to avoid deadlocks
+// (deriveRelayAddr / ICE / QUIC take locks or block).
 func (m *Manager) Start() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	m.logger.Info("Starting P2P manager with QUIC + ICE/STUN/TURN")
 
-	// Generate session ID
+	m.mu.Lock()
 	m.sessionID = fmt.Sprintf("sess_%d", time.Now().UnixNano())
+	m.mu.Unlock()
 
-	// Start HTTP API manager if available
+	// Start HTTP API manager if available (register + control plane)
 	if m.apiManager != nil {
 		if err := m.apiManager.Start(); err != nil {
 			return fmt.Errorf("failed to start API manager: %w", err)
 		}
-		// Заполняем обязательные поля после успешного старта API manager
+		m.mu.Lock()
 		m.peerID = m.apiManager.GetPeerID()
 		m.tenantID = m.config.TenantID
 		m.token = m.apiManager.GetToken()
 		m.relaySessionID = m.apiManager.GetRelaySessionID()
+		m.mu.Unlock()
 		m.logger.Info("HTTP API manager started", "peer_id", m.peerID, "tenant_id", m.tenantID)
 	}
 
-	// Конфигурация уже нормализована в NewManager через FillDefaults()
 	m.logger.Debug("Using normalized heartbeat config",
 		"interval", m.config.HeartbeatInterval,
 		"timeout", m.config.HeartbeatTimeout)
 
-	// Initialize ICE agent
-	if err := m.initializeICE(); err != nil {
-		return fmt.Errorf("failed to initialize ICE: %w", err)
-	}
+	m.mu.RLock()
+	skipDP := m.skipDataPlane
+	m.mu.RUnlock()
 
-	// Initialize QUIC connection
-	if err := m.initializeQUIC(); err != nil {
-		return fmt.Errorf("failed to initialize QUIC: %w", err)
-	}
+	if !skipDP {
+		// Initialize ICE agent (best-effort)
+		if err := m.initializeICE(); err != nil {
+			m.logger.Warn("ICE initialization failed; continuing with relay-assisted mode", "error", err)
+		}
 
-	// Connect to relay server with authentication
-	if err := m.connectToRelayServer(); err != nil {
-		return fmt.Errorf("failed to connect to relay server: %w", err)
-	}
+		// Initialize QUIC connection
+		if err := m.initializeQUIC(); err != nil {
+			m.logger.Warn("QUIC listener init failed; continuing without data-plane listener", "error", err)
+		}
 
-	// Exchange ICE credentials for P2P connectivity
-	if err := m.ExchangeICECredentials(); err != nil {
-		m.logger.Warn("Failed to exchange ICE credentials", "error", err)
-		// Продолжаем работу без ICE - fallback на relay
-	} else {
-		m.logger.Info("ICE credentials exchanged successfully")
-	}
-
-	// Get and apply WireGuard configuration for L3-overlay network
-	if m.wireguardClient != nil {
-		if err := m.ApplyWireGuardConfig(); err != nil {
-			m.logger.Warn("Failed to apply WireGuard config", "error", err)
-		} else {
-			m.logger.Info("L3-overlay network configured and applied",
-				"peer_ip", m.GetPeerIP(),
-				"tenant_cidr", m.GetTenantCIDR())
-
-			// Обновляем mesh сеть с WireGuard информацией
-			if err := m.UpdateMeshWithWireGuard(); err != nil {
-				m.logger.Warn("Failed to update mesh with WireGuard", "error", err)
+		// Connect to relay server with authentication (best-effort)
+		if m.quicConn != nil {
+			if err := m.connectToRelayServer(); err != nil {
+				m.logger.Warn("QUIC auth to relay failed; control plane (register/discover/heartbeat) remains active",
+					"error", err)
 			}
 		}
+
+		// Exchange ICE credentials for P2P connectivity
+		if err := m.ExchangeICECredentials(); err != nil {
+			m.logger.Warn("Failed to exchange ICE credentials", "error", err)
+		} else {
+			m.logger.Info("ICE credentials exchanged successfully")
+		}
+
+		// Get and apply WireGuard configuration for L3-overlay network
+		if m.wireguardClient != nil {
+			if err := m.ApplyWireGuardConfig(); err != nil {
+				m.logger.Warn("Failed to apply WireGuard config", "error", err)
+			} else {
+				m.logger.Info("L3-overlay network configured and applied",
+					"peer_ip", m.GetPeerIP(),
+					"tenant_cidr", m.GetTenantCIDR())
+				if err := m.UpdateMeshWithWireGuard(); err != nil {
+					m.logger.Warn("Failed to update mesh with WireGuard", "error", err)
+				}
+			}
+		}
+
+		// Create mesh network
+		if m.config.MeshConfig != nil {
+			m.mesh = NewMeshNetwork(m.config.MeshConfig, m.logger)
+			if err := m.mesh.Start(); err != nil {
+				return fmt.Errorf("failed to start mesh network: %w", err)
+			}
+		}
+
+		// Start L3-overlay health monitoring
+		go m.MonitorL3OverlayHealth()
+	} else {
+		m.logger.Info("Data plane skipped (control-plane / smoke mode)")
 	}
 
-	// Start peer discovery
+	// Start peer discovery + heartbeat (control plane)
 	if m.apiManager != nil {
 		go m.startPeerDiscovery()
 	}
-
-	// Start heartbeat routine
 	m.startHeartbeat()
 
-	// Create mesh network
-	if m.config.MeshConfig != nil {
-		m.mesh = NewMeshNetwork(m.config.MeshConfig, m.logger)
-		if err := m.mesh.Start(); err != nil {
-			return fmt.Errorf("failed to start mesh network: %w", err)
-		}
-	}
-
-	// Start L3-overlay health monitoring
-	go m.MonitorL3OverlayHealth()
-
+	m.mu.Lock()
 	m.status.IsConnected = true
 	m.status.MeshEnabled = true
+	m.mu.Unlock()
 	m.logger.Info("P2P manager started successfully")
 	return nil
 }
@@ -284,8 +295,17 @@ func (m *Manager) Stop() error {
 func (m *Manager) initializeICE() error {
 	m.logger.Info("Initializing ICE agent")
 
-	// STUN servers with correct format for pion/stun
-	stunServers := []string{"stun:edge.2gc.ru:19302"}
+	stunServers := []string{"stun:127.0.0.1:19302", "stun:stun.l.google.com:19302"}
+	if m.config != nil && m.config.NetworkConfig != nil && len(m.config.NetworkConfig.STUNServers) > 0 {
+		stunServers = m.config.NetworkConfig.STUNServers
+	}
+	// Prefer host set via SetRelayQUICEndpoint for local loopback STUN
+	m.mu.RLock()
+	rh := m.relayHost
+	m.mu.RUnlock()
+	if rh != "" && rh != "127.0.0.1" && rh != "localhost" {
+		stunServers = append([]string{fmt.Sprintf("stun:%s:19302", rh)}, stunServers...)
+	}
 
 	// Create ICE agent
 	m.iceAgent = ice.NewICEAgent(stunServers, []string{}, m.logger)
@@ -346,8 +366,18 @@ func (m *Manager) connectToRelayServer() error {
 	relayAddr := m.deriveRelayAddrFromConfig()
 	m.logger.Info("Connecting to relay server", "address", relayAddr)
 
-	// Create QUIC connection to relay server
-	err := m.quicConn.Connect(m.ctx, relayAddr)
+	// Create QUIC connection to relay server (bounded)
+	connectCtx, connectCancel := context.WithTimeout(m.ctx, 8*time.Second)
+	defer connectCancel()
+	// Allow insecure TLS for local loopback smoke when dialing 127.0.0.1
+	if host, _, err := net.SplitHostPort(relayAddr); err == nil && (host == "127.0.0.1" || host == "localhost") {
+		m.quicConn.SetClientTLSConfig(&tls.Config{
+			MinVersion:         tls.VersionTLS13,
+			InsecureSkipVerify: true,
+			NextProtos:         []string{"cloudbridge-p2p", "h3"},
+		})
+	}
+	err := m.quicConn.Connect(connectCtx, relayAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to relay server: %w", err)
 	}
@@ -365,14 +395,29 @@ func (m *Manager) connectToRelayServer() error {
 		return fmt.Errorf("failed to send auth token: %w", err)
 	}
 
-	// Read authentication response
-	buffer := make([]byte, 1024)
-	n, err := stream.Read(buffer)
-	if err != nil {
-		return fmt.Errorf("failed to read auth response: %w", err)
+	// Read authentication response with timeout (previously blocked forever)
+	type readResult struct {
+		n   int
+		err error
+		buf []byte
+	}
+	ch := make(chan readResult, 1)
+	go func() {
+		buffer := make([]byte, 1024)
+		n, err := stream.Read(buffer)
+		ch <- readResult{n: n, err: err, buf: buffer}
+	}()
+	var result readResult
+	select {
+	case result = <-ch:
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("timeout waiting for AUTH response from relay")
+	}
+	if result.err != nil {
+		return fmt.Errorf("failed to read auth response: %w", result.err)
 	}
 
-	response := string(buffer[:n])
+	response := string(result.buf[:result.n])
 	if response != "AUTH_OK" {
 		return fmt.Errorf("authentication failed: %s", response)
 	}
@@ -1123,6 +1168,13 @@ func (m *Manager) SetRelayQUICEndpoint(host string, quicPort int) {
 	if quicPort > 0 {
 		m.relayQUICPort = quicPort
 	}
+}
+
+// SetSkipDataPlane skips ICE/QUIC/WG bring-up (control-plane membership only).
+func (m *Manager) SetSkipDataPlane(skip bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.skipDataPlane = skip
 }
 
 // deriveRelayAddrFromConfig returns host:port for P2P QUIC (UDP).
