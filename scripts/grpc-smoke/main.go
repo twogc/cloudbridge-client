@@ -1,12 +1,7 @@
-// grpc-smoke: Track B+ — Connect + Hello + Authenticate + CreateTunnel against local relay :8444.
-// Usage:
-//
-//	go run ./scripts/grpc-smoke -host 127.0.0.1 -port 8444 -token "$TOKEN"
-//	go run ./scripts/grpc-smoke -tunnel -echo-port 18080
+// grpc-smoke: Connect + Hello + Authenticate + CreateTunnel + TCP bytes.
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -56,9 +51,9 @@ func startEcho(port int) (net.Listener, error) {
 func main() {
 	host := flag.String("host", "127.0.0.1", "relay host")
 	port := flag.Int("port", types.DefaultGRPCPort, "gRPC port")
-	token := flag.String("token", "", "JWT (any string if relay auth is no-op)")
-	doTunnel := flag.Bool("tunnel", true, "also CreateTunnel to local echo")
-	echoPort := flag.Int("echo-port", 18080, "local TCP echo for CreateTunnel remote")
+	token := flag.String("token", "", "JWT")
+	doTunnel := flag.Bool("tunnel", true, "CreateTunnel + TCP bytes")
+	echoPort := flag.Int("echo-port", 18080, "local TCP echo")
 	flag.Parse()
 
 	if *token == "" {
@@ -75,10 +70,7 @@ func main() {
 			Ports: types.RelayPorts{
 				GRPC: *port,
 			},
-			TLS: types.TLSConfig{
-				Enabled:    false,
-				VerifyCert: false,
-			},
+			TLS: types.TLSConfig{Enabled: false, VerifyCert: false},
 		},
 	}
 
@@ -86,40 +78,37 @@ func main() {
 	client := transport.NewGRPCClient(cfg, logger)
 	tr := transport.NewGRPCTransport(client, logger)
 
-	log.Printf("Connecting gRPC %s:%d (TLS=off)", *host, *port)
+	log.Printf("Connecting gRPC %s:%d", *host, *port)
 	if err := tr.Connect(); err != nil {
 		log.Fatalf("GRPC_SMOKE_FAIL connect: %v", err)
 	}
 	defer func() { _ = tr.Disconnect() }()
-	log.Printf("GRPC_STEP=connect_ok target=%s", cfg.GRPCTarget())
+	log.Printf("GRPC_STEP=connect_ok")
 
-	hello, err := tr.Hello("smoke-1.0", []string{"tls", "heartbeat", "tunnel_info", "grpc"})
+	hello, err := tr.Hello("smoke-1.0", []string{"tls", "heartbeat", "grpc"})
 	if err != nil {
 		log.Fatalf("GRPC_SMOKE_FAIL hello: %v", err)
 	}
 	if hello.Status != "ok" {
-		log.Fatalf("GRPC_SMOKE_FAIL hello status=%s err=%s", hello.Status, hello.ErrorMessage)
+		log.Fatalf("GRPC_SMOKE_FAIL hello status=%s", hello.Status)
 	}
-	log.Printf("GRPC_STEP=hello_ok status=%s session=%s server=%s",
-		hello.Status, hello.SessionID, hello.ServerVersion)
+	log.Printf("GRPC_STEP=hello_ok session=%s", hello.SessionID)
 
 	auth, err := tr.Authenticate(*token)
 	if err != nil {
 		log.Fatalf("GRPC_SMOKE_FAIL auth: %v", err)
 	}
 	if auth.Status != "ok" {
-		log.Fatalf("GRPC_SMOKE_FAIL auth status=%s err=%s", auth.Status, auth.ErrorMessage)
+		log.Fatalf("GRPC_SMOKE_FAIL auth status=%s", auth.Status)
 	}
-	log.Printf("GRPC_STEP=auth_ok status=%s client_id=%s tenant_id=%s",
-		auth.Status, auth.ClientID, auth.TenantID)
+	log.Printf("GRPC_STEP=auth_ok client_id=%s", auth.ClientID)
 
 	if *doTunnel {
 		ln, err := startEcho(*echoPort)
 		if err != nil {
-			log.Fatalf("GRPC_SMOKE_FAIL echo listen: %v", err)
+			log.Fatalf("GRPC_SMOKE_FAIL echo: %v", err)
 		}
 		defer ln.Close()
-		// wait briefly for accept loop
 		time.Sleep(50 * time.Millisecond)
 
 		tunnelID := fmt.Sprintf("smoke-tun-%d", time.Now().Unix())
@@ -127,22 +116,35 @@ func main() {
 		if tenantID == "" {
 			tenantID = "default"
 		}
-		// CreateTunnel RPC: server opens dial to remote_host:remote_port
 		tun, err := tr.CreateTunnel(tunnelID, tenantID, 0, "127.0.0.1", *echoPort)
 		if err != nil {
 			log.Fatalf("GRPC_SMOKE_FAIL CreateTunnel: %v", err)
 		}
 		if tun.Status != "ok" {
-			log.Fatalf("GRPC_SMOKE_FAIL CreateTunnel status=%s err=%s", tun.Status, tun.ErrorMessage)
+			log.Fatalf("GRPC_SMOKE_FAIL tunnel status=%s err=%s", tun.Status, tun.ErrorMessage)
 		}
-		log.Printf("GRPC_STEP=tunnel_ok status=%s tunnel_id=%s endpoint=%s",
-			tun.Status, tun.TunnelID, tun.Endpoint)
+		log.Printf("GRPC_STEP=tunnel_ok endpoint=%s", tun.Endpoint)
 
-		// ListTunnels is not on Transport interface — optional skip
-		_ = context.Background()
+		payload := []byte("tunnel-bytes-smoke")
+		conn, err := net.DialTimeout("tcp", tun.Endpoint, 5*time.Second)
+		if err != nil {
+			log.Fatalf("GRPC_SMOKE_FAIL dial endpoint %s: %v", tun.Endpoint, err)
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		if _, err := conn.Write(payload); err != nil {
+			log.Fatalf("GRPC_SMOKE_FAIL write: %v", err)
+		}
+		buf := make([]byte, len(payload))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			log.Fatalf("GRPC_SMOKE_FAIL read echo: %v", err)
+		}
+		if string(buf) != string(payload) {
+			log.Fatalf("GRPC_SMOKE_FAIL mismatch got=%q", buf)
+		}
+		log.Printf("GRPC_STEP=tunnel_bytes_ok payload=%q", buf)
 	}
 
-	log.Printf("GRPC_SMOKE_PASS=1 host=%s port=%d tunnel=%v at=%s",
-		*host, *port, *doTunnel, time.Now().Format(time.RFC3339))
-	fmt.Println("Track B+: gRPC Connect+Hello+Auth+CreateTunnel OK")
+	log.Printf("GRPC_SMOKE_PASS=1 bytes=true")
+	fmt.Println("gRPC CreateTunnel data-plane (TCP bytes) OK")
 }
