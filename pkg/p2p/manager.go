@@ -103,11 +103,22 @@ func NewManagerWithAPI(config *P2PConfig, apiConfig *api.ManagerConfig,
 	authManager *auth.AuthManager, token string, logger Logger) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Parse heartbeat interval from mesh config
-	heartbeatInterval := 30 * time.Second // default
-	if config.MeshConfig != nil && config.MeshConfig.HeartbeatInterval != nil {
+	if config == nil {
+		config = &P2PConfig{}
+	}
+	// Phase D.3: always normalize top-level heartbeat (JWT extract often leaves 0)
+	config.FillDefaults()
+	heartbeatInterval := config.HeartbeatInterval
+	if heartbeatInterval <= 0 && config.MeshConfig != nil && config.MeshConfig.HeartbeatInterval != nil {
 		heartbeatInterval = api.ParseHeartbeatInterval(config.MeshConfig.HeartbeatInterval)
 	}
+	if heartbeatInterval <= 0 && apiConfig != nil && apiConfig.HeartbeatInterval > 0 {
+		heartbeatInterval = apiConfig.HeartbeatInterval
+	}
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = 30 * time.Second
+	}
+	config.HeartbeatInterval = heartbeatInterval
 
 	// Create API manager
 	apiManagerConfig := &api.ManagerConfig{
@@ -802,24 +813,49 @@ func ExtractP2PConfigFromToken(authManager *auth.AuthManager, token *jwt.Token) 
 		}
 	}
 
-	return &P2PConfig{
+	cfg := &P2PConfig{
 		ConnectionType: ConnectionType(connectionType),
 		MeshConfig:     p2pMeshConfig,
 		PeerWhitelist:  p2pPeerWhitelist,
 		NetworkConfig:  p2pNetworkConfig,
 		TenantID:       tenantID,
 		Permissions:    permissions,
-	}, nil
+	}
+	cfg.FillDefaults() // HeartbeatInterval 30s when JWT has no mesh timers (Phase D.3)
+	return cfg, nil
+}
+
+// ApplyClientP2PDefaults merges YAML/types.Config p2p.* into token-derived config.
+// Prefer explicit client config when > 0 (smoke YAML sets p2p.heartbeat_interval: 10s).
+func ApplyClientP2PDefaults(p2pCfg *P2PConfig, heartbeatInterval, heartbeatTimeout time.Duration) {
+	if p2pCfg == nil {
+		return
+	}
+	if heartbeatInterval > 0 {
+		p2pCfg.HeartbeatInterval = heartbeatInterval
+	}
+	if heartbeatTimeout > 0 {
+		p2pCfg.HeartbeatTimeout = heartbeatTimeout
+	}
+	p2pCfg.FillDefaults()
 }
 
 // startHeartbeat starts the heartbeat routine to maintain connection with relay
 func (m *Manager) startHeartbeat() {
-	if m.config.HeartbeatInterval <= 0 {
-		m.logger.Warn("Heartbeat interval not configured, skipping heartbeat")
-		return
+	interval := time.Duration(0)
+	if m.config != nil {
+		interval = m.config.HeartbeatInterval
+	}
+	if interval <= 0 {
+		// Fail-safe: never skip silently on misconfigured extract (D.3)
+		interval = 30 * time.Second
+		if m.config != nil {
+			m.config.HeartbeatInterval = interval
+		}
+		m.logger.Debug("Heartbeat interval was zero; using default", "interval", interval)
 	}
 
-	m.heartbeatTicker = time.NewTicker(m.config.HeartbeatInterval)
+	m.heartbeatTicker = time.NewTicker(interval)
 
 	go func() {
 		defer m.heartbeatTicker.Stop()
@@ -837,7 +873,7 @@ func (m *Manager) startHeartbeat() {
 		}
 	}()
 
-	m.logger.Info("Heartbeat routine started", "interval", m.config.HeartbeatInterval)
+	m.logger.Info("Heartbeat routine started", "interval", interval)
 }
 
 // sendHeartbeat sends a heartbeat to the relay server

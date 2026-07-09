@@ -770,6 +770,7 @@ func (c *Client) initializeP2PManager(token *jwt.Token) error {
 	if err != nil {
 		return fmt.Errorf("failed to extract P2P config from token: %w", err)
 	}
+	p2p.ApplyClientP2PDefaults(p2pConfig, c.config.P2P.HeartbeatInterval, c.config.P2P.HeartbeatTimeout)
 
 	// Create P2P logger
 	p2pLogger := &p2pLogger{client: c}

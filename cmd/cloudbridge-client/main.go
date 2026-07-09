@@ -953,6 +953,8 @@ func runP2P(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to extract P2P config from token: %w", err)
 	}
+	// Prefer YAML p2p.heartbeat_interval (smoke uses 10s) over empty JWT mesh timers
+	p2p.ApplyClientP2PDefaults(p2pConfig, cfg.P2P.HeartbeatInterval, cfg.P2P.HeartbeatTimeout)
 
 	// Create API manager configuration
 	apiConfig := &api.ManagerConfig{
@@ -965,7 +967,7 @@ func runP2P(cmd *cobra.Command, args []string) error {
 		MaxBackoff:             cfg.API.MaxBackoff,
 		Token:                  tokenToUse,
 		TenantID:               p2pConfig.TenantID,
-		HeartbeatInterval:      cfg.P2P.HeartbeatInterval,
+		HeartbeatInterval:      p2pConfig.HeartbeatInterval,
 		RouteMonitoringEnabled: cfg.API.RouteMonitoringEnabled,
 	}
 

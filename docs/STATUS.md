@@ -97,6 +97,7 @@ Defaults off: `path_select.enabled`, `api.route_monitoring_enabled`, `ice.signal
 | 2026-07-09 | Phase D.2/D.5 build + tests | **OK** | ice.signaling_enabled=false; AUTH_PROFILES |
 | 2026-07-09 | local-smoke relay + `all-smoke.sh` | **ALL_SMOKE_PASS=1** | lab-hmac; D.1 skip route open |
 | 2026-07-09 | `session --smoke --force` live | **SESSION_SMOKE_PASS=1** | active_path=relay_quic |
+| 2026-07-09 | D.3 p2p smoke heartbeat | **OK** | interval 10s from YAML; no skip warn |
 | 2026-07-09 | **CLI tunnel e2e** `tunnel --smoke` | **OK** | localPort → relay endpoint → remote |
 | 2026-07-09 | **QUIC multi-peer mesh** A↔B `TO:<peer>` | **OK** | scripts/quic-mesh-smoke |
 | 2026-07-09 | **`p2p --smoke-data`** | **OK** | membership + QUIC AUTH/PING |

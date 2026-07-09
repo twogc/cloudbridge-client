@@ -197,7 +197,7 @@ path_select:
 |----|------|------------|
 | D.1 | Align `/relay/route` client schema **or** disable probe when unsupported | **[x]** disabled by default (`api.route_monitoring_enabled=false`); SoT schema documented in CONTRACT |
 | D.2 | Discover/ICE/credentials path audit vs relay SoT | **[x]** Discover LIVE; ICE REST **N/A** — `ice.signaling_enabled=false` |
-| D.3 | Heartbeat interval defaults in smoke configs | **[~]** Manager clamps `interval<=0` → 15s; ParseHeartbeatInterval default 30s; smoke YAML uses 10s |
+| D.3 | Heartbeat interval defaults in smoke configs | **[x]** YAML `p2p.heartbeat_interval` applied after JWT extract; FillDefaults 30s; smoke shows `interval 10s` (2026-07-09) |
 | D.4 | OIDC smoke (optional CI job) against test issuer / mock | offline unit OK; **live job open** |
 | D.5 | gRPC auth: real JWT validation path in local-smoke optional profile | **[x]** [AUTH_PROFILES.md](../AUTH_PROFILES.md) — lab-hmac vs prod-oidc; gRPC Authenticate is real, not NoOp |
 
