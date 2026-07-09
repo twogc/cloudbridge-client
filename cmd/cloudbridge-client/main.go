@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/quic-go/quic-go"
 	"github.com/spf13/cobra" // Required for CLI interface
 	"github.com/twogc/cloudbridge-client/pkg/api"
 	"github.com/twogc/cloudbridge-client/pkg/auth"
@@ -52,6 +54,8 @@ var (
 	// smoke: exit after control-plane mesh membership is ready (register + optional checks)
 	p2pSmoke     bool
 	p2pSmokeWait time.Duration
+	// smoke-data: after membership, also verify QUIC AUTH + PING/PONG (data plane)
+	p2pSmokeData bool
 	// tunnel --smoke: create tunnel, push bytes via local port, exit
 	tunnelSmoke bool
 
@@ -302,8 +306,10 @@ func createP2PCommand() *cobra.Command {
 	p2pCmd.Flags().StringVar(&peerID, "peer-id", "", "Peer ID for P2P mesh (optional, auto-generated if not provided)")
 	p2pCmd.Flags().BoolVar(&p2pSmoke, "smoke", false,
 		"Smoke mode: start mesh membership then exit (CI/local loop)")
+	p2pCmd.Flags().BoolVar(&p2pSmokeData, "smoke-data", false,
+		"Also verify QUIC data plane (AUTH + PING/PONG) after membership; implies --smoke")
 	p2pCmd.Flags().DurationVar(&p2pSmokeWait, "smoke-wait", 45*time.Second,
-		"Max time to wait for P2P Start in --smoke mode")
+		"Max time to wait for P2P Start in --smoke / --smoke-data mode")
 
 	return p2pCmd
 }
@@ -803,6 +809,11 @@ func minInt(a, b int) int {
 func runP2P(cmd *cobra.Command, args []string) error {
 	log.Printf("Starting P2P mesh mode with QUIC + ICE/STUN/TURN...")
 
+	// --smoke-data implies membership smoke + data-plane check
+	if p2pSmokeData {
+		p2pSmoke = true
+	}
+
 	// Load configuration
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
@@ -896,7 +907,8 @@ func runP2P(cmd *cobra.Command, args []string) error {
 	// Dial P2P QUIC to relay using canonical ports from config (docs/CONTRACT_CLIENT_RELAY.md)
 	p2pManager.SetRelayQUICEndpoint(cfg.Relay.Host, cfg.EffectiveP2PQUICPort())
 	if p2pSmoke {
-		// Membership smoke: register + heartbeat + discovery without ICE/QUIC hang risks
+		// Membership smoke: register + heartbeat + discovery without ICE/QUIC hang risks.
+		// Data plane is verified separately via smokeQUICDataPlane when --smoke-data.
 		p2pManager.SetSkipDataPlane(true)
 	}
 
@@ -953,9 +965,28 @@ func runP2P(cmd *cobra.Command, args []string) error {
 	}
 
 	if p2pSmoke {
-		// Control-plane membership checks via API manager path already completed in Start.
-		// Extra discover through a short second manager is unnecessary; report ready and exit.
-		log.Printf("SMOKE_PASS=1 peer=%s control_plane=ok", livePeerID)
+		log.Printf("SMOKE_STEP=control_plane_ok peer=%s", livePeerID)
+
+		if p2pSmokeData {
+			quicHost := cfg.Relay.Host
+			if quicHost == "" {
+				quicHost = "127.0.0.1"
+			}
+			quicPort := cfg.EffectiveP2PQUICPort()
+			if err := smokeQUICDataPlane(quicHost, quicPort, tokenToUse, livePeerID); err != nil {
+				// Hard-fail by default when --smoke-data is requested.
+				// Soft-fail only if SMOKE_DATA_SOFT=1 (CI can opt into warn-only).
+				if soft := os.Getenv("SMOKE_DATA_SOFT"); soft == "1" || strings.EqualFold(soft, "true") {
+					log.Printf("SMOKE_WARN data_plane_failed soft=%v err=%v", soft, err)
+					log.Printf("SMOKE_PASS=1 peer=%s control_plane=ok data_plane=soft_fail", livePeerID)
+					return nil
+				}
+				return fmt.Errorf("smoke-data: QUIC data plane failed: %w", err)
+			}
+			log.Printf("SMOKE_PASS=1 peer=%s control_plane=ok data_plane=ok", livePeerID)
+		} else {
+			log.Printf("SMOKE_PASS=1 peer=%s control_plane=ok", livePeerID)
+		}
 		log.Printf("Smoke mode complete — exiting successfully")
 		return nil
 	}
@@ -1097,6 +1128,93 @@ func runTunnel(cmd *cobra.Command, args []string) error {
 		log.Println("Context canceled, closing...")
 	}
 
+	return nil
+}
+
+// smokeQUICDataPlane dials relay QUIC, AUTH with JWT, then PING/PONG on a second stream.
+// Used by p2p --smoke-data (membership already verified; skipDataPlane still on).
+func smokeQUICDataPlane(host string, quicPort int, jwtToken, peerHint string) error {
+	if quicPort <= 0 {
+		quicPort = types.DefaultP2PQUICPort
+	}
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", quicPort))
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
+	tlsConf := &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"cloudbridge-p2p", "h3"},
+		ServerName:         "localhost",
+	}
+	if host != "127.0.0.1" && host != "localhost" {
+		tlsConf.ServerName = host
+	}
+	qconf := &quic.Config{
+		HandshakeIdleTimeout:  8 * time.Second,
+		MaxIdleTimeout:        20 * time.Second,
+		KeepAlivePeriod:       10 * time.Second,
+		MaxIncomingStreams:    64,
+		MaxIncomingUniStreams: 64,
+	}
+
+	log.Printf("SMOKE_STEP=quic_dial addr=%s peer_hint=%s", addr, peerHint)
+	conn, err := quic.DialAddr(ctx, addr, tlsConf, qconf)
+	if err != nil {
+		return fmt.Errorf("quic dial %s: %w", addr, err)
+	}
+	defer conn.CloseWithError(0, "smoke-data done")
+
+	stream, err := conn.OpenStreamSync(ctx)
+	if err != nil {
+		return fmt.Errorf("open auth stream: %w", err)
+	}
+	authMsg := "AUTH " + jwtToken
+	if _, err := stream.Write([]byte(authMsg)); err != nil {
+		_ = stream.Close()
+		return fmt.Errorf("write AUTH: %w", err)
+	}
+	_ = stream.SetReadDeadline(time.Now().Add(8 * time.Second))
+	buf := make([]byte, 256)
+	n, err := stream.Read(buf)
+	if err != nil {
+		_ = stream.Close()
+		return fmt.Errorf("read AUTH response: %w", err)
+	}
+	resp := string(buf[:n])
+	if resp != "AUTH_OK" {
+		_ = stream.Close()
+		return fmt.Errorf("expected AUTH_OK got %q", resp)
+	}
+	_ = stream.Close()
+	log.Printf("SMOKE_STEP=quic_auth_ok")
+
+	time.Sleep(50 * time.Millisecond)
+	dataStream, err := conn.OpenStreamSync(ctx)
+	if err != nil {
+		return fmt.Errorf("open data stream: %w", err)
+	}
+	defer dataStream.Close()
+
+	payload := "p2p-smoke-data"
+	pingMsg := "PING " + payload
+	if _, err := dataStream.Write([]byte(pingMsg)); err != nil {
+		return fmt.Errorf("write PING: %w", err)
+	}
+	_ = dataStream.SetReadDeadline(time.Now().Add(8 * time.Second))
+	n, err = dataStream.Read(buf)
+	if err != nil {
+		return fmt.Errorf("read PONG: %w", err)
+	}
+	pong := string(buf[:n])
+	want := "PONG " + payload
+	if pong != want {
+		return fmt.Errorf("expected %q got %q", want, pong)
+	}
+	log.Printf("SMOKE_STEP=quic_ping_ok payload=%q", payload)
 	return nil
 }
 

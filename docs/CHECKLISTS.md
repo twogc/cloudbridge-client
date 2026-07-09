@@ -117,6 +117,8 @@ Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
 | `PUT …/status` | PASS |
 | `POST …/heartbeat` | PASS (route wired on relay 2026-07-09) |
 | CLI `p2p --smoke` | PASS exit 0, `SMOKE_PASS=1` (control-plane membership) |
+| CLI `p2p --smoke-data` | PASS membership + QUIC AUTH/PING (`data_plane=ok`) |
+| **All-in-one** `scripts/all-smoke.sh` | PASS `ALL_SMOKE_PASS=1` |
 | 2-peer mesh-smoke | PASS `MESH_SMOKE_PASS=1` peers≥2 |
 | gRPC :8444 | PASS listen (local-smoke enables grpc, tls off) |
 | Full QUIC multi-peer mesh data | PASS `scripts/quic-mesh-smoke` A↔B `TO:<peer>:<payload>` |

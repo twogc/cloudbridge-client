@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** Track A + gRPC/CLI tunnel + QUIC AUTH/PING + **multi-peer TO mesh** green. Next: tighter p2p --smoke data-plane opt-in.
+**Now:** Full local baseline green via `scripts/all-smoke.sh` (incl. `p2p --smoke-data`). Next: WP4 REST drift / OIDC smoke.
 
 ## Test log (fill as you run)
 
@@ -64,6 +64,8 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | QUIC post-AUTH **PING/PONG** | **OK** | second stream after AUTH_OK |
 | 2026-07-09 | **CLI tunnel e2e** `tunnel --smoke` | **OK** | localPort → relay endpoint → remote |
 | 2026-07-09 | **QUIC multi-peer mesh** A↔B `TO:<peer>` | **OK** | scripts/quic-mesh-smoke |
+| 2026-07-09 | **`p2p --smoke-data`** | **OK** | membership + QUIC AUTH/PING |
+| 2026-07-09 | **`scripts/all-smoke.sh`** | **OK** | ALL_SMOKE_PASS=1 |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |

@@ -37,6 +37,20 @@ Record failures in [docs/STATUS.md](../docs/STATUS.md) test log — do not claim
 
 See CHECKLISTS §5 (REST :5552, gRPC :8444, `p2p` CLI). Requires token and reachable relay.
 
+**One-shot local harness** (relay `local-smoke` already running):
+
+```bash
+# installer: scripts/local-smoke/run-relay.sh start
+./scripts/all-smoke.sh
+# optional: SKIP_CLI_TUNNEL=1 SKIP_MESH_PEERS=1 P2P_SMOKE_DATA=0
+# soft data-plane: SMOKE_DATA_SOFT=1
+```
+
+CLI flags:
+
+- `p2p --smoke` — control-plane membership only  
+- `p2p --smoke-data` — membership + QUIC AUTH + PING/PONG (hard-fail unless `SMOKE_DATA_SOFT=1`)
+
 ## Quality tools
 
 - `.golangci.yml` — run `golangci-lint` when available
