@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** Track A + Track B green locally. Next optional: QUIC data-plane e2e, CreateTunnel gRPC, push remotes.
+**Now:** Track A + gRPC tunnel + full QUIC AUTH green. Next: push remotes; optional peer-to-peer data after AUTH.
 
 ## Test log (fill as you run)
 
