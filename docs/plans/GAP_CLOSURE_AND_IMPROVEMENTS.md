@@ -20,7 +20,7 @@
 | A | Foundation: `pkg/pathselect` | [x] **done** 2026-07-09 |
 | B | Adapters: RelayQUIC + GRPCTunnel | [x] **done** 2026-07-09 |
 | C | Selector + CLI + chaos smokes (**L1 milestone**) | [x] **partial→stronger** — unit chaos + live `session --smoke` + `RUN_PATHSELECT=1` in all-smoke; iptables optional |
-| D | Control-plane hygiene (WP4 + OIDC) | [~] D.1+D.2+D.5 done 2026-07-09; D.4 live OIDC open |
+| D | Control-plane hygiene (WP4 + OIDC) | [x] D.1–D.5 core 2026-07-09; live Zitadel still optional |
 | E | ICE / STUN / TURN ladder | [ ] |
 | F | Handover + session health | [ ] |
 | G | Enhanced (MASQUE / SLO / multi-relay) | [ ] |
@@ -52,7 +52,7 @@
 | G4 | Reconnect после обрыва | Partial retries on connect | Долгая «мёртвая» сессия |
 | G5 | Health = не session-level | UDP probe MASQUE / none | Ложные switch / no switch |
 | G6 | REST drift (`/relay/route` 400 и т.п.) | best-effort | Шум, ложные fails |
-| G7 | OIDC/Zitadel e2e | local HMAC + NoOp gRPC | Prod auth path не доказан |
+| G7 | OIDC/Zitadel e2e | offline D.4 mock RS256 PASS; live Zitadel optional | lab-hmac L0; prod-oidc offline proven |
 
 ### 1.2 Важные, но после ядра
 
@@ -198,7 +198,7 @@ path_select:
 | D.1 | Align `/relay/route` client schema **or** disable probe when unsupported | **[x]** disabled by default (`api.route_monitoring_enabled=false`); SoT schema documented in CONTRACT |
 | D.2 | Discover/ICE/credentials path audit vs relay SoT | **[x]** Discover LIVE; ICE REST **N/A** — `ice.signaling_enabled=false` |
 | D.3 | Heartbeat interval defaults in smoke configs | **[x]** YAML `p2p.heartbeat_interval` applied after JWT extract; FillDefaults 30s; smoke shows `interval 10s` (2026-07-09) |
-| D.4 | OIDC smoke (optional CI job) against test issuer / mock | offline unit OK; **live job open** |
+| D.4 | OIDC smoke (optional CI job) against test issuer / mock | **[x]** offline RS256 mock + `scripts/oidc-smoke.sh`; CI step; live via `OIDC_LIVE=1` optional |
 | D.5 | gRPC auth: real JWT validation path in local-smoke optional profile | **[x]** [AUTH_PROFILES.md](../AUTH_PROFILES.md) — lab-hmac vs prod-oidc; gRPC Authenticate is real, not NoOp |
 
 **Acceptance:** clean logs on `all-smoke`; CONTRACT matrix rows for route/ICE green or explicitly N/A.

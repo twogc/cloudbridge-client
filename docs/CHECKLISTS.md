@@ -201,7 +201,7 @@ For each fail, log:
 | Mode | Config | Result |
 |------|--------|--------|
 | JWT HMAC (dev) | `auth.type=jwt` + secret | [x] lab-hmac — L0 all-smoke profile ([AUTH_PROFILES.md](./AUTH_PROFILES.md)) |
-| OIDC Zitadel | `auth.type=oidc` + issuer/audience | [ ] live e2e open (D.4); offline unit mock OK |
+| OIDC Zitadel | `auth.type=oidc` + issuer/audience | [x] offline D.4 (`oidc-smoke.sh offline`); live optional |
 | Skip validation | **dev only** | [ ] must stay off in prod templates |
 
 - [ ] Claims `tenant_id` present after auth

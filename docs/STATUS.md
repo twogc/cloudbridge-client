@@ -41,7 +41,7 @@
 | ~~PathSelector foundation / adapters / unit chaos~~ | — | Phase A–C partial [x] |
 | ~~Live pathselect in all-smoke~~ | — | `RUN_PATHSELECT=1` step 7 [x] |
 | Real iptables chaos (block 5553/8444) | P2 | optional ops |
-| OIDC live e2e | P2 | D.4 residual; lab-hmac is L0 |
+| OIDC live against real Zitadel | P3 | optional `oidc-smoke.sh live` |
 | MASQUE/handover/SLO unwired | P2 | GAP Phase F–G |
 | Go 1.25.3 vs installer 1.25.12 | P2 | WP5 |
 | ~~Live smoke not run~~ | — | `all-smoke` PASS (L0) |
@@ -61,14 +61,14 @@
 |-------|---------|--------|
 | **L0** Local baseline | `scripts/all-smoke.sh` | **PASS** |
 | L1 Orchestrated MVP | Phase C unit chaos + session CLI | **partial** |
-| L2 Control clean | Phase D | **D.1–D.2 + D.5 docs**; D.4 live OIDC open |
+| L2 Control clean | Phase D | **D.1–D.5** (live Zitadel optional) |
 | L3 NAT-aware | Phase E | not started |
 | L4 Resilient handover | Phase F | not started |
 | L5 Enhanced | Phase G | not started |
 
-**Now:** L0 green + Phase A–C partial L1 + **D.1/D.2/D.5**: route mon off, ICE signaling off, [AUTH_PROFILES.md](AUTH_PROFILES.md) (lab-hmac vs prod-oidc).  
+**Now:** L0 green + L1 pathselect smoke + **Phase D core** (D.1–D.5): route/ICE gates, heartbeat, auth profiles, OIDC offline smoke.  
 Defaults off: `path_select.enabled`, `api.route_monitoring_enabled`, `ice.signaling_enabled`.  
-**Next:** D.4 live OIDC optional; live `session --smoke --force`; disk 160G when volume ready.
+**Next:** disk 160G; optional live OIDC; Phase E when needed.
 
 ## Test log (fill as you run)
 
@@ -100,6 +100,7 @@ Defaults off: `path_select.enabled`, `api.route_monitoring_enabled`, `ice.signal
 | 2026-07-09 | `session --smoke --force` live | **SESSION_SMOKE_PASS=1** | active_path=relay_quic |
 | 2026-07-09 | D.3 p2p smoke heartbeat | **OK** | interval 10s from YAML; no skip warn |
 | 2026-07-09 | `RUN_PATHSELECT=1 all-smoke.sh` | **ALL_SMOKE_PASS=1** | step 7 SESSION_SMOKE_PASS active_path=relay_quic |
+| 2026-07-09 | `scripts/oidc-smoke.sh offline` | **OIDC_SMOKE_PASS=1** | D.4 mock RS256 + discovery |
 | 2026-07-09 | **CLI tunnel e2e** `tunnel --smoke` | **OK** | localPort → relay endpoint → remote |
 | 2026-07-09 | **QUIC multi-peer mesh** A↔B `TO:<peer>` | **OK** | scripts/quic-mesh-smoke |
 | 2026-07-09 | **`p2p --smoke-data`** | **OK** | membership + QUIC AUTH/PING |

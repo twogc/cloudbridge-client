@@ -31,7 +31,9 @@
 | Relay | Zitadel-issued access tokens validated via JWKS |
 | Used by | staging/prod; **not** default all-smoke |
 
-**Status:** client package supports OIDC; offline unit tests mock JWKS. **Live OIDC e2e** still open (GAP D.4).
+**Status:** client package supports OIDC.  
+**Offline D.4:** `scripts/oidc-smoke.sh offline` — mock discovery + JWKS + RS256 round-trip (CI).  
+**Live D.4:** `OIDC_LIVE_*=… scripts/oidc-smoke.sh live` — optional when Zitadel credentials available.
 
 ---
 
@@ -60,8 +62,9 @@ Env overrides follow existing `CLOUDBRIDGE_*` / Viper rules.
 | Check | lab-hmac | prod-oidc |
 |-------|----------|-----------|
 | `go test ./pkg/auth/ -short` | required | required |
+| `scripts/oidc-smoke.sh offline` | N/A | **D.4 offline** (mock RS256) |
 | local-smoke / all-smoke | primary | optional later |
-| Live Zitadel smoke | N/A | D.4 residual |
+| `scripts/oidc-smoke.sh live` | N/A | optional with real token |
 
 ---
 
@@ -70,3 +73,4 @@ Env overrides follow existing `CLOUDBRIDGE_*` / Viper rules.
 | Date | Note |
 |------|------|
 | 2026-07-09 | Initial profiles for Phase D.5 honesty |
+| 2026-07-09 | D.4 offline OIDC smoke + live optional path |
