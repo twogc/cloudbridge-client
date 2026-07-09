@@ -42,7 +42,7 @@
 
 See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 
-**Now:** local loop is green for REST + heartbeat + gRPC listen. Optional: full mesh e2e / push remotes.
+**Now:** Track A membership green (`--smoke`, 2-peer). Next optional: QUIC data-plane e2e (not skip), gRPC Hello, or push.
 
 ## Test log (fill as you run)
 

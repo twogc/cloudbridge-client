@@ -116,8 +116,10 @@ Optional CLI: `RUN_CLI=1 cloudbridge-client/scripts/local-smoke.sh`
 | `GET …/peers` discover | PASS |
 | `PUT …/status` | PASS |
 | `POST …/heartbeat` | PASS (route wired on relay 2026-07-09) |
-| CLI `p2p` register | PASS HTTP 200 (then runs long mesh loop; use timeout) |
+| CLI `p2p --smoke` | PASS exit 0, `SMOKE_PASS=1` (control-plane membership) |
+| 2-peer mesh-smoke | PASS `MESH_SMOKE_PASS=1` peers≥2 |
 | gRPC :8444 | PASS listen (local-smoke enables grpc, tls off) |
+| Full QUIC data-plane mesh | deferred (soft-fail / skip in --smoke) |
 | Host note | Prometheus already uses TCP **9090**; smoke config moves HTTP API to **19090** |
 
 ### 5.1 L4 reachability
