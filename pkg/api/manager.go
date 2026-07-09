@@ -177,20 +177,22 @@ func (m *Manager) Stop() {
 		return
 	}
 
-	// Notify relay about closed logical connection (monitoring)
+	// Notify relay about closed logical connection (only if route monitoring was used)
 	if m.sessionID != "" {
 		if m.hbStopCh != nil {
 			close(m.hbStopCh)
 			m.hbStopCh = nil
 		}
-		closeReq := &ConnectionRequest{
-			TenantID:  m.tenantID,
-			PeerID:    m.peerID,
-			SessionID: m.sessionID,
-			Protocol:  "tcp",
-		}
-		if err := m.client.CloseConnection(m.ctx, m.token, closeReq); err != nil {
-			m.logger.Warn("Failed to close relay connection for monitoring", "error", err)
+		if m.config != nil && m.config.RouteMonitoringEnabled {
+			closeReq := &ConnectionRequest{
+				TenantID:  m.tenantID,
+				PeerID:    m.peerID,
+				SessionID: m.sessionID,
+				Protocol:  "tcp",
+			}
+			if err := m.client.CloseConnection(m.ctx, m.token, closeReq); err != nil {
+				m.logger.Warn("Failed to close relay connection for monitoring", "error", err)
+			}
 		}
 	}
 
