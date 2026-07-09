@@ -186,6 +186,11 @@ type ICEConfig struct {
 	MaxBindingRequests int           `mapstructure:"max_binding_requests"`
 	ConnectivityChecks bool          `mapstructure:"connectivity_checks"`
 	CandidateGathering bool          `mapstructure:"candidate_gathering"`
+	// SignalingEnabled posts credentials/candidates to relay REST
+	// (…/ice-credentials, /api/v1/ice/candidates). Relay SoT currently lacks these
+	// routes — default false to avoid 404 WARN spam (GAP Phase D.2). Local ICE
+	// agent gather may still run when CandidateGathering is true.
+	SignalingEnabled bool `mapstructure:"signaling_enabled"`
 }
 
 // QUICConfig contains QUIC connection configuration

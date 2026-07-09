@@ -59,10 +59,13 @@ Host placeholder: `{relay}` (default prod example: `edge.2gc.ru`).
 
 | Client path | Relay | Action |
 |-------------|-------|--------|
-| `…/ice-credentials` | not found | implement on relay **or** disable client |
-| `/api/v1/ice/candidates` | not found | same |
-| `/api/v1/p2p/connect` | not found | same |
+| `…/ice-credentials` | **MISSING** | Client **disabled by default** (`ice.signaling_enabled=false`, Phase D.2) |
+| `/api/v1/ice/candidates` | **MISSING** | same gate |
+| `/api/v1/p2p/connect` | not found | N/A for L0 smoke |
 | ~~`/api/v1/relay/connections/*`~~ | mapped to `/relay/route` + peer heartbeat | client WP4 partial |
+| POST `/api/v1/relay/route` as ConnectionRequest | wrong schema | **disabled** (`api.route_monitoring_enabled=false`, D.1) |
+
+**ICE status (D.2):** relay signaling **N/A** on installer SoT until routes exist. Local STUN/TURN gather may still run; REST exchange skipped unless `ice.signaling_enabled=true`.
 
 ---
 
@@ -98,11 +101,22 @@ CLI default: `--transport grpc`.
 
 | Mode | Client | Relay (post-cleanup) |
 |------|--------|----------------------|
-| OIDC / JWKS (Zitadel) | `auth.type=oidc` | Canonical |
-| JWT HMAC secret | `auth.type=jwt` | Legacy; may not match Zitadel-issued tokens |
+| OIDC / JWKS (Zitadel) | `auth.type=oidc` | Canonical for production |
+| JWT HMAC secret | `auth.type=jwt` | **Lab / local-smoke** profile |
 | Claims | `tenant_id`, `org_id`, `permissions`, network/mesh | Align field names with relay `RelayClaims` |
 
 Onboarding invites → **control plane** (`/api/v1/invites/*`), not relay.
+
+### 5.1 Lab vs production auth profiles (Phase D.5)
+
+| Profile | When | Client | Relay | gRPC Authenticate |
+|---------|------|--------|-------|-------------------|
+| **lab-hmac** | `scripts/local-smoke*`, `all-smoke` | `auth.type=jwt` + shared HMAC secret; often `auth.skip_validation` only in extreme dev | `config.local-smoke.json`, TLS often off | **Real** RPC to `:8444` with JWT; not a NoOp transport, but **not** Zitadel JWKS |
+| **prod-oidc** | staging/prod | `auth.type=oidc` + `issuer_url` / `audience` / JWKS | Zitadel | Real JWT validation path aligned with OIDC issuer |
+
+**Honesty:** L0 smokes prove **lab-hmac**, not enterprise OIDC e2e. Do not claim “OIDC production-ready” until a live or CI OIDC smoke is green (D.4 residual).
+
+See also: [AUTH_PROFILES.md](./AUTH_PROFILES.md).
 
 ---
 
@@ -124,3 +138,4 @@ Onboarding invites → **control plane** (`/api/v1/invites/*`), not relay.
 | Date | Change |
 |------|--------|
 | 2026-07-09 | Initial contract from dual-repo analysis; PR-1 alignment started |
+| 2026-07-09 | D.1 route monitoring off; D.2 ICE signaling off; D.5 lab-hmac vs prod-oidc profiles |

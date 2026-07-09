@@ -128,6 +128,8 @@ func setDefaults() {
 	viper.SetDefault("ice.max_binding_requests", 7)
 	viper.SetDefault("ice.connectivity_checks", true)
 	viper.SetDefault("ice.candidate_gathering", true)
+	// Off until relay implements ice-credentials / ice/candidates (Phase D.2)
+	viper.SetDefault("ice.signaling_enabled", false)
 
 	// QUIC
 	viper.SetDefault("quic.handshake_timeout", "10s")

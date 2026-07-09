@@ -46,6 +46,8 @@ type Manager struct {
 	relayQUICPort int
 	// skipDataPlane: control-plane only (register/discover/heartbeat) — used by --smoke
 	skipDataPlane bool
+	// iceSignalingEnabled: REST ICE credentials/candidates with relay (default off — Phase D.2)
+	iceSignalingEnabled bool
 	// L3-overlay network fields
 	peerIP          string
 	tenantCIDR      string
@@ -189,11 +191,18 @@ func (m *Manager) Start() error {
 			}
 		}
 
-		// Exchange ICE credentials for P2P connectivity
-		if err := m.ExchangeICECredentials(); err != nil {
-			m.logger.Warn("Failed to exchange ICE credentials", "error", err)
+		// Exchange ICE credentials for P2P connectivity (relay routes often MISSING — gated)
+		m.mu.RLock()
+		iceSig := m.iceSignalingEnabled
+		m.mu.RUnlock()
+		if iceSig {
+			if err := m.ExchangeICECredentials(); err != nil {
+				m.logger.Warn("Failed to exchange ICE credentials", "error", err)
+			} else {
+				m.logger.Info("ICE credentials exchanged successfully")
+			}
 		} else {
-			m.logger.Info("ICE credentials exchanged successfully")
+			m.logger.Debug("ICE relay signaling disabled (ice.signaling_enabled=false); skipping credentials exchange")
 		}
 
 		// Get and apply WireGuard configuration for L3-overlay network
@@ -951,6 +960,12 @@ func (m *Manager) IsL3OverlayReady() bool {
 
 // ExchangeICECredentials обменивается ICE credentials с сервером
 func (m *Manager) ExchangeICECredentials() error {
+	m.mu.RLock()
+	enabled := m.iceSignalingEnabled
+	m.mu.RUnlock()
+	if !enabled {
+		return fmt.Errorf("ICE relay signaling disabled (set ice.signaling_enabled=true when relay supports it)")
+	}
 	if m.apiManager == nil {
 		return fmt.Errorf("API manager not available")
 	}
@@ -1169,6 +1184,14 @@ func (m *Manager) SetRelayQUICEndpoint(host string, quicPort int) {
 	if quicPort > 0 {
 		m.relayQUICPort = quicPort
 	}
+}
+
+// SetICESignalingEnabled controls REST ICE credentials/candidates exchange with relay.
+// Default false: relay installer has no ice-credentials / ice/candidates SoT routes (Phase D.2).
+func (m *Manager) SetICESignalingEnabled(enabled bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.iceSignalingEnabled = enabled
 }
 
 // SetSkipDataPlane skips ICE/QUIC/WG bring-up (control-plane membership only).

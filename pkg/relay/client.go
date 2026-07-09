@@ -793,6 +793,7 @@ func (c *Client) initializeP2PManager(token *jwt.Token) error {
 	c.p2pManager = p2p.NewManagerWithAPI(p2pConfig, apiConfig, c.authManager, c.tokenString, p2pLogger)
 	// P2P QUIC UDP dial — ports.quic (5553), not REST/gRPC ports
 	c.p2pManager.SetRelayQUICEndpoint(c.config.Relay.Host, c.config.EffectiveP2PQUICPort())
+	c.p2pManager.SetICESignalingEnabled(c.config.ICE.SignalingEnabled)
 
 	// Start P2P manager
 	if err := c.p2pManager.Start(); err != nil {

@@ -572,6 +572,7 @@ func runWireGuardConfig(cmd *cobra.Command, args []string) error {
 
 	// Create P2P manager with HTTP API support
 	p2pManager := p2p.NewManagerWithAPI(p2pConfig, apiConfig, authManager, tokenToUse, p2pLogger)
+	p2pManager.SetICESignalingEnabled(cfg.ICE.SignalingEnabled)
 
 	// Get WireGuard configuration
 	config, err := p2pManager.GetWireGuardConfig()
@@ -660,6 +661,7 @@ func runWireGuardStatus(cmd *cobra.Command, args []string) error {
 
 	// Create P2P manager with HTTP API support
 	p2pManager := p2p.NewManagerWithAPI(p2pConfig, apiConfig, authManager, tokenToUse, p2pLogger)
+	p2pManager.SetICESignalingEnabled(cfg.ICE.SignalingEnabled)
 
 	// Get status
 	status := p2pManager.GetStatus()
@@ -974,6 +976,7 @@ func runP2P(cmd *cobra.Command, args []string) error {
 	p2pManager := p2p.NewManagerWithAPI(p2pConfig, apiConfig, authManager, tokenToUse, p2pLogger)
 	// Dial P2P QUIC to relay using canonical ports from config (docs/CONTRACT_CLIENT_RELAY.md)
 	p2pManager.SetRelayQUICEndpoint(cfg.Relay.Host, cfg.EffectiveP2PQUICPort())
+	p2pManager.SetICESignalingEnabled(cfg.ICE.SignalingEnabled)
 	if p2pSmoke {
 		// Membership smoke: register + heartbeat + discovery without ICE/QUIC hang risks.
 		// Data plane is verified separately via smokeQUICDataPlane when --smoke-data.
