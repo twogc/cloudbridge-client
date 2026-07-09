@@ -1,15 +1,17 @@
-// grpc-smoke: Track B — Connect + Hello + Authenticate against local relay :8444.
+// grpc-smoke: Track B+ — Connect + Hello + Authenticate + CreateTunnel against local relay :8444.
 // Usage:
 //
 //	go run ./scripts/grpc-smoke -host 127.0.0.1 -port 8444 -token "$TOKEN"
-//
-// Local-smoke relay: grpc.enabled=true, tls_enabled=false, auth often no-op (any token OK).
+//	go run ./scripts/grpc-smoke -tunnel -echo-port 18080
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -31,10 +33,32 @@ func (logAdapter) Error(msg string, fields ...interface{}) { log.Print("ERROR " 
 func (logAdapter) Debug(msg string, fields ...interface{}) { log.Print("DEBUG " + msg + formatFields(fields)) }
 func (logAdapter) Warn(msg string, fields ...interface{})  { log.Print("WARN  " + msg + formatFields(fields)) }
 
+func startEcho(port int) (net.Listener, error) {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				_, _ = io.Copy(conn, conn)
+			}(c)
+		}
+	}()
+	return ln, nil
+}
+
 func main() {
 	host := flag.String("host", "127.0.0.1", "relay host")
 	port := flag.Int("port", types.DefaultGRPCPort, "gRPC port")
-	token := flag.String("token", "", "JWT (or any string if relay auth is no-op)")
+	token := flag.String("token", "", "JWT (any string if relay auth is no-op)")
+	doTunnel := flag.Bool("tunnel", true, "also CreateTunnel to local echo")
+	echoPort := flag.Int("echo-port", 18080, "local TCP echo for CreateTunnel remote")
 	flag.Parse()
 
 	if *token == "" {
@@ -43,7 +67,6 @@ func main() {
 	if *token == "" {
 		*token = "local-smoke-grpc-token"
 	}
-	// Hello RBAC requires authorization metadata; transport reads CLOUDBRIDGE_TOKEN for Hello.
 	_ = os.Setenv("CLOUDBRIDGE_TOKEN", *token)
 
 	cfg := &types.Config{
@@ -53,7 +76,7 @@ func main() {
 				GRPC: *port,
 			},
 			TLS: types.TLSConfig{
-				Enabled:    false, // local-smoke plaintext gRPC
+				Enabled:    false,
 				VerifyCert: false,
 			},
 		},
@@ -77,8 +100,8 @@ func main() {
 	if hello.Status != "ok" {
 		log.Fatalf("GRPC_SMOKE_FAIL hello status=%s err=%s", hello.Status, hello.ErrorMessage)
 	}
-	log.Printf("GRPC_STEP=hello_ok status=%s session=%s server=%s features=%v",
-		hello.Status, hello.SessionID, hello.ServerVersion, hello.SupportedFeatures)
+	log.Printf("GRPC_STEP=hello_ok status=%s session=%s server=%s",
+		hello.Status, hello.SessionID, hello.ServerVersion)
 
 	auth, err := tr.Authenticate(*token)
 	if err != nil {
@@ -90,8 +113,36 @@ func main() {
 	log.Printf("GRPC_STEP=auth_ok status=%s client_id=%s tenant_id=%s",
 		auth.Status, auth.ClientID, auth.TenantID)
 
-	// Optional: GetStatus if available on control service via transport — skip if not exposed on Transport iface
-	log.Printf("GRPC_SMOKE_PASS=1 host=%s port=%d elapsed_ok=true at=%s",
-		*host, *port, time.Now().Format(time.RFC3339))
-	fmt.Println("Track B: gRPC Connect+Hello+Auth OK")
+	if *doTunnel {
+		ln, err := startEcho(*echoPort)
+		if err != nil {
+			log.Fatalf("GRPC_SMOKE_FAIL echo listen: %v", err)
+		}
+		defer ln.Close()
+		// wait briefly for accept loop
+		time.Sleep(50 * time.Millisecond)
+
+		tunnelID := fmt.Sprintf("smoke-tun-%d", time.Now().Unix())
+		tenantID := auth.TenantID
+		if tenantID == "" {
+			tenantID = "default"
+		}
+		// CreateTunnel RPC: server opens dial to remote_host:remote_port
+		tun, err := tr.CreateTunnel(tunnelID, tenantID, 0, "127.0.0.1", *echoPort)
+		if err != nil {
+			log.Fatalf("GRPC_SMOKE_FAIL CreateTunnel: %v", err)
+		}
+		if tun.Status != "ok" {
+			log.Fatalf("GRPC_SMOKE_FAIL CreateTunnel status=%s err=%s", tun.Status, tun.ErrorMessage)
+		}
+		log.Printf("GRPC_STEP=tunnel_ok status=%s tunnel_id=%s endpoint=%s",
+			tun.Status, tun.TunnelID, tun.Endpoint)
+
+		// ListTunnels is not on Transport interface — optional skip
+		_ = context.Background()
+	}
+
+	log.Printf("GRPC_SMOKE_PASS=1 host=%s port=%d tunnel=%v at=%s",
+		*host, *port, *doTunnel, time.Now().Format(time.RFC3339))
+	fmt.Println("Track B+: gRPC Connect+Hello+Auth+CreateTunnel OK")
 }

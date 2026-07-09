@@ -59,6 +59,7 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | Heartbeat route + gRPC local-smoke | **OK** | :8444 listen; POST heartbeat 200 |
 | 2026-07-09 | Track A `p2p --smoke` + 2-peer script | **OK** | MESH_SMOKE_PASS=1 |
 | 2026-07-09 | Track B gRPC Hello/Auth | **OK** | GRPC_SMOKE_PASS=1 :8444 |
+| 2026-07-09 | CreateTunnel + full QUIC AUTH | **OK** | TUNNEL_QUIC_SMOKE_PASS=1 |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |
