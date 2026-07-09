@@ -3,7 +3,7 @@
 **Project:** `cloudbridge-client` (+ минимальные правки relay при необходимости)  
 **Created:** 2026-07-09  
 **Documented:** 2026-07-09  
-**Status:** **documented / ready to execute** (not started coding Phase A)  
+**Status:** **Phase A done** (library); **Phase B done** (adapters, verified 2026-07-09 step 3)  
 **Index:** [plans/README.md](./README.md)
 
 **Depends on:**  
@@ -17,10 +17,10 @@
 
 | Phase | Title | Status |
 |-------|--------|--------|
-| A | Foundation: `pkg/pathselect` | [ ] not started |
-| B | Adapters: RelayQUIC + GRPCTunnel | [ ] |
-| C | Selector + CLI + chaos smokes (**L1 milestone**) | [ ] |
-| D | Control-plane hygiene (WP4 + OIDC) | [ ] |
+| A | Foundation: `pkg/pathselect` | [x] **done** 2026-07-09 |
+| B | Adapters: RelayQUIC + GRPCTunnel | [x] **done** 2026-07-09 |
+| C | Selector + CLI + chaos smokes (**L1 milestone**) | [x] **partial** 2026-07-09 — chaos unit + `session --smoke`; live iptables optional |
+| D | Control-plane hygiene (WP4 + OIDC) | [~] D.1 done 2026-07-09 (`route_monitoring_enabled=false`) |
 | E | ICE / STUN / TURN ladder | [ ] |
 | F | Handover + session health | [ ] |
 | G | Enhanced (MASQUE / SLO / multi-relay) | [ ] |
@@ -118,9 +118,11 @@ type Selector interface {
 
 **Acceptance:**
 
-- [ ] `go test ./pkg/pathselect/...` green  
-- [ ] No behavior change in production CLI yet (library only)  
-- [ ] STATUS: Phase A done  
+- [x] `go test ./pkg/pathselect/...` green  
+- [x] No behavior change in production CLI yet (library only)  
+- [x] STATUS: Phase A done  
+
+**Implemented:** `pkg/pathselect` — `Session`/`SessionState`, `Path`/`Handle`/`Selector`, `LadderSelector`, `Config` + `path_select:` defaults in `pkg/config`, stub path for tests.
 
 **Out of scope:** wiring into `p2p`/`tunnel` CLI.
 
@@ -139,9 +141,12 @@ type Selector interface {
 
 **Acceptance:**
 
+- [x] Adapter unit tests with injectable deps (Probe fail/success, Open, LadderSelector)  
 - [ ] Adapter probes succeed against local-smoke (manual or `-tags smoke`)  
 - [ ] `all-smoke` still green without new CLI  
-- [ ] No nil deref if WG/MASQUE disabled  
+- [x] No nil deref if WG/MASQUE disabled  
+
+**Implemented:** `RelayQUICPath`, `GRPCTunnelPath`, shared dial helpers (`P2PQUICAddr`/`GRPCTarget` wrappers), `NewDefaultPaths`, optional `//go:build smoke` stub.
 
 **Out of scope:** ICE/WG/MASQUE adapters (Phase E+).
 
@@ -190,9 +195,9 @@ path_select:
 
 | ID | Task | Acceptance |
 |----|------|------------|
-| D.1 | Align `/relay/route` client schema **or** disable probe when unsupported | no WARN spam on happy path |
+| D.1 | Align `/relay/route` client schema **or** disable probe when unsupported | **[x]** disabled by default (`api.route_monitoring_enabled=false`); SoT schema documented in CONTRACT |
 | D.2 | Discover/ICE/credentials path audit vs relay SoT | contract table updated |
-| D.3 | Heartbeat interval defaults in smoke configs | no «interval 0» warn |
+| D.3 | Heartbeat interval defaults in smoke configs | **[~]** Manager clamps `interval<=0` → 15s; ParseHeartbeatInterval default 30s; smoke YAML uses 10s |
 | D.4 | OIDC smoke (optional CI job) against test issuer / mock | offline + one live job |
 | D.5 | gRPC auth: real JWT validation path in local-smoke optional profile | doc which profile is NoOp |
 

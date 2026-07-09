@@ -1,10 +1,11 @@
 # Path selection state machine (A ↔ B)
 
-**Status:** design target (not fully implemented)  
+**Status:** design target — **Phase A–B implemented** (`pkg/pathselect` library + `RelayQUICPath`/`GRPCTunnelPath` adapters); CLI wiring + chaos smokes Phase C  
 **Date:** 2026-07-09  
 **Documented:** 2026-07-09  
 **Index:** [plans/README.md](./README.md)  
-**Execution plan:** [GAP_CLOSURE_AND_IMPROVEMENTS.md](./GAP_CLOSURE_AND_IMPROVEMENTS.md) (phases A–G)
+**Execution plan:** [GAP_CLOSURE_AND_IMPROVEMENTS.md](./GAP_CLOSURE_AND_IMPROVEMENTS.md) (phases A–G)  
+**Code:** `pkg/pathselect` — `Session` state machine, `LadderSelector`, `RelayQUICPath`, `GRPCTunnelPath`, `NewDefaultPaths` (33 unit tests green)
 
 **Honesty rule:** boxes marked **LIVE** have local smoke evidence; **STUB** exist as packages/config; **TODO** need wiring/e2e.
 
@@ -233,9 +234,9 @@ tunnel --smoke        → gRPC CreateTunnel path                     LIVE
 quic-mesh-smoke       → Relay QUIC TO:peer A↔B                     LIVE
 all-smoke.sh          → suite of the above                         LIVE
 
-PathSelector ladder   → NOT a single component yet                 TODO
-block UDP 5553 chaos  → must fall to CreateTunnel                  TODO smoke
-block gRPC chaos      → must fall to QUIC mesh                     TODO smoke
+PathSelector ladder   → `LadderSelector` + adapters in `pkg/pathselect` (library only)  Phase B
+block UDP 5553 chaos  → must fall to CreateTunnel                  TODO smoke (Phase C)
+block gRPC chaos      → must fall to QUIC mesh                     TODO smoke (Phase C)
 ```
 
 ---
@@ -246,9 +247,9 @@ block gRPC chaos      → must fall to QUIC mesh                     TODO smoke
    - `Session` state enum + timers  
    - interface `Path { Probe(ctx); Open(); Close(); Health() }`
 
-2. **Adapters (wrap existing code)**  
-   - `TunnelPath` → CreateTunnel + local proxy  
-   - `RelayQUICPath` → AUTH + TO/PING  
+2. **Adapters (wrap existing code)** — **Phase B done**  
+   - `GRPCTunnelPath` → CreateTunnel + local proxy (`grpc_tunnel_path.go`)  
+   - `RelayQUICPath` → AUTH + TO/PING (`relay_quic_path.go`)  
    - (later) `ICEPath`, `WGPath`
 
 3. **Ladder policy config**  
@@ -306,5 +307,5 @@ No automatic “if X blocked use Y” between those yet.
 |----------|--------|
 | Is architecture direction sound? | **Yes** — session + ladder + multipath |
 | Is auto protocol switch done? | **No** — stubs + one weak QUIC↔WG probe |
-| What to build next? | **SessionManager + PathSelector + 2 chaos smokes** |
+| What to build next? | **Phase C: wire Selector to CLI + 2 chaos smokes** (adapters ready) |
 | What not to build next? | More protocols before orchestration |

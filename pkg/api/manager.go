@@ -46,6 +46,9 @@ type ManagerConfig struct {
 	Token              string
 	TenantID           string
 	HeartbeatInterval  time.Duration
+	// RouteMonitoringEnabled: if false (default), skip Open/CloseConnection on /relay/route
+	// which uses a different schema than ConnectionRequest (Phase D.1).
+	RouteMonitoringEnabled bool
 }
 
 // NewManager creates a new HTTP API manager
@@ -99,27 +102,34 @@ func (m *Manager) Start() error {
 		return fmt.Errorf("failed to register peer: %w", err)
 	}
 
-	// Monitoring open is best-effort; /relay/route schema differs from ConnectionRequest.
+	// Optional monitoring open via POST /relay/route — disabled by default (Phase D.1).
+	// Relay RelayRouteRequest requires from_peer/to_peer/data/message_type; ConnectionRequest → 400 spam.
 	m.mu.Lock()
 	m.sessionID = fmt.Sprintf("sess_%d", time.Now().UnixNano())
 	sessionID := m.sessionID
 	tenantID := m.tenantID
 	peerID := m.peerID
 	token := m.token
+	routeMon := m.config != nil && m.config.RouteMonitoringEnabled
 	m.mu.Unlock()
 
-	m.logger.Debug("Opening relay connection for monitoring", "tenant_id", tenantID, "peer_id", peerID, "session_id", sessionID)
-	openReq := &ConnectionRequest{
-		TenantID:  tenantID,
-		PeerID:    peerID,
-		SessionID: sessionID,
-		Protocol:  "tcp",
-		Meta:      map[string]interface{}{},
-	}
-	if err := m.client.OpenConnection(m.ctx, token, openReq); err != nil {
-		m.logger.Warn("Failed to open relay connection for monitoring", "error", err)
+	if routeMon {
+		m.logger.Debug("Opening relay connection for monitoring", "tenant_id", tenantID, "peer_id", peerID, "session_id", sessionID)
+		openReq := &ConnectionRequest{
+			TenantID:  tenantID,
+			PeerID:    peerID,
+			SessionID: sessionID,
+			Protocol:  "tcp",
+			Meta:      map[string]interface{}{},
+		}
+		if err := m.client.OpenConnection(m.ctx, token, openReq); err != nil {
+			m.logger.Warn("Failed to open relay connection for monitoring", "error", err)
+		} else {
+			m.logger.Info("Successfully opened relay connection for monitoring", "session_id", sessionID)
+		}
 	} else {
-		m.logger.Info("Successfully opened relay connection for monitoring", "session_id", sessionID)
+		m.logger.Debug("route monitoring disabled; skipping POST /relay/route open",
+			"session_id", sessionID, "hint", "set api.route_monitoring_enabled=true only with matching schema")
 	}
 
 	// Start peer heartbeat (uses …/peers/:id/heartbeat)
@@ -357,13 +367,13 @@ func (m *Manager) startHeartbeat() {
 				consecutiveFailures++
 				m.logger.Error("Failed to send heartbeat", "error", err, "failures", consecutiveFailures)
 
-				// After 3 consecutive failures, attempt to re-register and reopen monitoring session
+				// After 3 consecutive failures, attempt to re-register (and optional route monitoring reopen)
 				if consecutiveFailures >= 3 {
-					m.logger.Warn("Heartbeat failing consecutively; attempting re-registration and session reopen")
+					m.logger.Warn("Heartbeat failing consecutively; attempting re-registration")
 
-					// Close old session if exists
 					oldSession := m.sessionID
-					if oldSession != "" {
+					routeMon := m.config != nil && m.config.RouteMonitoringEnabled
+					if routeMon && oldSession != "" {
 						closeReq := &ConnectionRequest{
 							TenantID:  m.tenantID,
 							PeerID:    m.peerID,
@@ -377,21 +387,22 @@ func (m *Manager) startHeartbeat() {
 					if err := m.registerPeer(); err != nil {
 						m.logger.Error("Re-registration failed", "error", err)
 					} else {
-						// Reopen monitoring session with a new session ID
 						m.sessionID = fmt.Sprintf("sess_%d", time.Now().UnixNano())
-						openReq := &ConnectionRequest{
-							TenantID:  m.tenantID,
-							PeerID:    m.peerID,
-							SessionID: m.sessionID,
-							Protocol:  "tcp",
-							Meta: map[string]interface{}{
-								"reopened_after": oldSession,
-							},
-						}
-						if err := m.client.OpenConnection(m.ctx, m.token, openReq); err != nil {
-							m.logger.Warn("Failed to reopen relay connection after re-registration", "error", err)
-						} else {
-							m.logger.Info("Monitoring session reopened after re-registration", "session_id", m.sessionID)
+						if routeMon {
+							openReq := &ConnectionRequest{
+								TenantID:  m.tenantID,
+								PeerID:    m.peerID,
+								SessionID: m.sessionID,
+								Protocol:  "tcp",
+								Meta: map[string]interface{}{
+									"reopened_after": oldSession,
+								},
+							}
+							if err := m.client.OpenConnection(m.ctx, m.token, openReq); err != nil {
+								m.logger.Warn("Failed to reopen relay connection after re-registration", "error", err)
+							} else {
+								m.logger.Info("Monitoring session reopened after re-registration", "session_id", m.sessionID)
+							}
 						}
 					}
 

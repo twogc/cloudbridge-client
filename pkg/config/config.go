@@ -117,6 +117,8 @@ func setDefaults() {
 	viper.SetDefault("api.max_retries", 3)
 	viper.SetDefault("api.backoff_multiplier", 2.0)
 	viper.SetDefault("api.max_backoff", "60s")
+	// Off: POST /relay/route is peer-message routing, not ConnectionRequest monitoring (Phase D.1)
+	viper.SetDefault("api.route_monitoring_enabled", false)
 
 	// ICE
 	viper.SetDefault("ice.stun_servers", []string{"edge.2gc.ru:19302", "stun.l.google.com:19302"})
@@ -178,6 +180,15 @@ func setDefaults() {
 	viper.SetDefault("wireguard.port", types.DefaultWireGuardPort)
 	viper.SetDefault("wireguard.mtu", 1420)
 	viper.SetDefault("wireguard.persistent_keepalive", "25s")
+
+	// Path selection ladder (GAP Phase A) — off until Phase C wires CLI
+	viper.SetDefault("path_select.enabled", false)
+	viper.SetDefault("path_select.order", []string{"relay_quic", "grpc_tunnel"})
+	viper.SetDefault("path_select.probe_timeout", "5s")
+	viper.SetDefault("path_select.ladder_timeout", "45s")
+	viper.SetDefault("path_select.health_interval", "10s")
+	viper.SetDefault("path_select.failover_cooldown", "15s")
+	viper.SetDefault("path_select.soft_fail", false)
 }
 
 // validateConfig validates the configuration

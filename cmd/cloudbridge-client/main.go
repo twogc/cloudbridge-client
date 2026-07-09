@@ -20,6 +20,7 @@ import (
 	"github.com/twogc/cloudbridge-client/pkg/config"
 	"github.com/twogc/cloudbridge-client/pkg/errors"
 	"github.com/twogc/cloudbridge-client/pkg/p2p"
+	"github.com/twogc/cloudbridge-client/pkg/pathselect"
 	"github.com/twogc/cloudbridge-client/pkg/relay"
 	"github.com/twogc/cloudbridge-client/pkg/service"
 	"github.com/twogc/cloudbridge-client/pkg/types"
@@ -58,6 +59,12 @@ var (
 	p2pSmokeData bool
 	// tunnel --smoke: create tunnel, push bytes via local port, exit
 	tunnelSmoke bool
+
+	// session --smoke: pathselect ladder (Phase C); force enables path_select for one shot
+	sessionSmoke bool
+	sessionForce bool
+	sessionTenant string
+	sessionPeer   string
 
 	// HTTP API specific flags
 	insecureSkipTLSVerify bool
@@ -115,6 +122,7 @@ func main() {
 	// Add subcommands
 	rootCmd.AddCommand(createP2PCommand())
 	rootCmd.AddCommand(createTunnelCommand())
+	rootCmd.AddCommand(createSessionCommand())
 	rootCmd.AddCommand(createServiceCommand())
 	rootCmd.AddCommand(createWireGuardCommand())
 
@@ -334,6 +342,63 @@ func createTunnelCommand() *cobra.Command {
 	return tunnelCmd
 }
 
+// createSessionCommand wires pathselect LadderSelector (GAP Phase C).
+// Default path_select.enabled stays false so all-smoke is unchanged unless --force.
+func createSessionCommand() *cobra.Command {
+	sessionCmd := &cobra.Command{
+		Use:   "session",
+		Short: "Path-selected A↔B session (ladder)",
+		Long:  "Run pathselect Ensure over relay_quic then grpc_tunnel (when path_select.enabled or --force).",
+		RunE:  runSession,
+	}
+	sessionCmd.Flags().BoolVar(&sessionSmoke, "smoke", false,
+		"Smoke mode: run pathselect Ensure once, print active path + metrics, exit")
+	sessionCmd.Flags().BoolVar(&sessionForce, "force", false,
+		"Force-enable path_select for this run (does not change config file)")
+	sessionCmd.Flags().StringVar(&sessionTenant, "tenant", "", "Tenant ID for OpenRequest")
+	sessionCmd.Flags().StringVar(&sessionPeer, "peer-id", "", "Local peer ID")
+	return sessionCmd
+}
+
+func runSession(cmd *cobra.Command, args []string) error {
+	if !sessionSmoke {
+		return fmt.Errorf("session: only --smoke is implemented in Phase C (use path_select for library)")
+	}
+	cfg, err := config.LoadConfig(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	tok := token
+	if tok == "" {
+		tok = cfg.Auth.Token
+	}
+	if tok == "" {
+		return fmt.Errorf("session --smoke requires --token or auth.token in config")
+	}
+	if insecureSkipTLSVerify {
+		cfg.API.InsecureSkipVerify = true
+		cfg.Relay.TLS.VerifyCert = false
+	}
+	if caPath != "" {
+		cfg.Relay.TLS.CACert = caPath
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	pathselect.ResetMetrics()
+	res, err := pathselect.RunSessionSmoke(ctx, cfg, tok, sessionTenant, sessionPeer, sessionForce)
+	if res != nil {
+		log.Printf("pathselect smoke: active_path=%s duration=%s metrics=%+v",
+			res.ActivePath, res.Duration, res.Metrics)
+	}
+	if err != nil {
+		return fmt.Errorf("pathselect smoke: %w", err)
+	}
+	log.Printf("SESSION_SMOKE_PASS=1 active_path=%s", res.ActivePath)
+	return nil
+}
+
 // createServiceCommand creates the service management subcommand
 func createServiceCommand() *cobra.Command {
 	svcCmd := &cobra.Command{
@@ -490,15 +555,16 @@ func runWireGuardConfig(cmd *cobra.Command, args []string) error {
 
 	// Create API manager configuration
 	apiConfig := &api.ManagerConfig{
-		BaseURL:            cfg.API.BaseURL,
-		InsecureSkipVerify: cfg.API.InsecureSkipVerify,
-		Timeout:            cfg.API.Timeout,
-		MaxRetries:         cfg.API.MaxRetries,
-		BackoffMultiplier:  cfg.API.BackoffMultiplier,
-		MaxBackoff:         cfg.API.MaxBackoff,
-		Token:              tokenToUse,
-		TenantID:           p2pConfig.TenantID,
-		HeartbeatInterval:  30 * time.Second,
+		BaseURL:                cfg.API.BaseURL,
+		InsecureSkipVerify:     cfg.API.InsecureSkipVerify,
+		Timeout:                cfg.API.Timeout,
+		MaxRetries:             cfg.API.MaxRetries,
+		BackoffMultiplier:      cfg.API.BackoffMultiplier,
+		MaxBackoff:             cfg.API.MaxBackoff,
+		Token:                  tokenToUse,
+		TenantID:               p2pConfig.TenantID,
+		HeartbeatInterval:      30 * time.Second,
+		RouteMonitoringEnabled: cfg.API.RouteMonitoringEnabled,
 	}
 
 	// Create P2P logger
@@ -577,15 +643,16 @@ func runWireGuardStatus(cmd *cobra.Command, args []string) error {
 
 	// Create API manager configuration
 	apiConfig := &api.ManagerConfig{
-		BaseURL:            cfg.API.BaseURL,
-		InsecureSkipVerify: cfg.API.InsecureSkipVerify,
-		Timeout:            cfg.API.Timeout,
-		MaxRetries:         cfg.API.MaxRetries,
-		BackoffMultiplier:  cfg.API.BackoffMultiplier,
-		MaxBackoff:         cfg.API.MaxBackoff,
-		Token:              tokenToUse,
-		TenantID:           p2pConfig.TenantID,
-		HeartbeatInterval:  30 * time.Second,
+		BaseURL:                cfg.API.BaseURL,
+		InsecureSkipVerify:     cfg.API.InsecureSkipVerify,
+		Timeout:                cfg.API.Timeout,
+		MaxRetries:             cfg.API.MaxRetries,
+		BackoffMultiplier:      cfg.API.BackoffMultiplier,
+		MaxBackoff:             cfg.API.MaxBackoff,
+		Token:                  tokenToUse,
+		TenantID:               p2pConfig.TenantID,
+		HeartbeatInterval:      30 * time.Second,
+		RouteMonitoringEnabled: cfg.API.RouteMonitoringEnabled,
 	}
 
 	// Create P2P logger
@@ -887,16 +954,17 @@ func runP2P(cmd *cobra.Command, args []string) error {
 
 	// Create API manager configuration
 	apiConfig := &api.ManagerConfig{
-		BaseURL:            cfg.API.BaseURL,
-		HeartbeatURL:       cfg.API.HeartbeatURL,
-		InsecureSkipVerify: cfg.API.InsecureSkipVerify,
-		Timeout:            cfg.API.Timeout,
-		MaxRetries:         cfg.API.MaxRetries,
-		BackoffMultiplier:  cfg.API.BackoffMultiplier,
-		MaxBackoff:         cfg.API.MaxBackoff,
-		Token:              tokenToUse,
-		TenantID:           p2pConfig.TenantID,
-		HeartbeatInterval:  cfg.P2P.HeartbeatInterval,
+		BaseURL:                cfg.API.BaseURL,
+		HeartbeatURL:           cfg.API.HeartbeatURL,
+		InsecureSkipVerify:     cfg.API.InsecureSkipVerify,
+		Timeout:                cfg.API.Timeout,
+		MaxRetries:             cfg.API.MaxRetries,
+		BackoffMultiplier:      cfg.API.BackoffMultiplier,
+		MaxBackoff:             cfg.API.MaxBackoff,
+		Token:                  tokenToUse,
+		TenantID:               p2pConfig.TenantID,
+		HeartbeatInterval:      cfg.P2P.HeartbeatInterval,
+		RouteMonitoringEnabled: cfg.API.RouteMonitoringEnabled,
 	}
 
 	// Create P2P logger

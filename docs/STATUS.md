@@ -14,7 +14,7 @@
 | Unit tests | `pkg/types`, `pkg/config` updated; re-run full suite and record |
 | Live e2e vs current relay | **Not verified** in this snapshot |
 | Enhanced stack (MASQUE, handover, SLO, probes) | Packages exist; **orchestrator sets nil** |
-| Path selection / auto-failover | **Designed, not implemented** — see plans |
+| Path selection / auto-failover | **Phase A–C partial L1** (`pathselect` + `session --smoke` + unit chaos); live port-block optional |
 | Docs | **Rebuilt** under `docs/` + openwiki (2026-07-09) |
 
 ## What works in code (implementation present)
@@ -35,7 +35,10 @@
 | ~~Hardcoded edge:5553 in p2p~~ | `SetRelayQUICEndpoint` | WP2 [x] |
 | ~~Wizard/onboarding/packaging old ports~~ | fixed WP3 | [x] |
 | REST path drift (discover, connections, ICE) | P1 | WP4 + GAP Phase D |
-| No Session / PathSelector / auto-failover | P1 | GAP Phase A–C |
+| ~~No Session / PathSelector foundation~~ | — | Phase A [x] `pkg/pathselect` |
+| ~~PathSelector foundation / adapters / unit chaos~~ | — | Phase A–C partial [x] |
+| Live path_select in all-smoke / real iptables chaos | P2 | optional |
+| REST `/relay/route` monitoring 400 spam | — | Phase D.1 [x] disabled by default |
 | MASQUE/handover/SLO unwired | P2 | GAP Phase F–G |
 | Go 1.25.3 vs installer 1.25.12 | P2 | WP5 |
 | ~~Live smoke not run~~ | — | `all-smoke` PASS (L0) |
@@ -54,14 +57,15 @@
 | Level | Meaning | State |
 |-------|---------|--------|
 | **L0** Local baseline | `scripts/all-smoke.sh` | **PASS** |
-| L1 Orchestrated MVP | Phase C chaos failover | not started |
-| L2 Control clean | Phase D | not started |
+| L1 Orchestrated MVP | Phase C unit chaos + session CLI | **partial** |
+| L2 Control clean | Phase D | **D.1 done**; D.2–D.5 open |
 | L3 NAT-aware | Phase E | not started |
 | L4 Resilient handover | Phase F | not started |
 | L5 Enhanced | Phase G | not started |
 
-**Now:** L0 green. **Next execute:** GAP **Phase A** (`pkg/pathselect` foundation).  
-Do not market above the highest level with green exit criteria.
+**Now:** L0 green + Phase A–C partial L1 + **Phase D.1 done** (no `/relay/route` monitoring spam).  
+`path_select.enabled` and `api.route_monitoring_enabled` default **false**.  
+**Next:** D.2–D.5 (ICE flag / heartbeat clamp / OIDC+gRPC auth docs) — mimo plan + orchestrator code.
 
 ## Test log (fill as you run)
 
@@ -78,9 +82,16 @@ Do not market above the highest level with green exit criteria.
 | 2026-07-09 | Heartbeat route + gRPC local-smoke | **OK** | :8444 listen; POST heartbeat 200 |
 | 2026-07-09 | Track A `p2p --smoke` + 2-peer script | **OK** | MESH_SMOKE_PASS=1 |
 | 2026-07-09 | Track B gRPC Hello/Auth | **OK** | GRPC_SMOKE_PASS=1 :8444 |
+| 2026-07-09 | `go test ./pkg/pathselect/ -count=1` | **OK** | Phase A foundation |
+| 2026-07-09 | `go test ./pkg/pathselect/ -count=1 -v` (Phase B verify) | **OK** | 33 tests PASS — RelayQUIC + GRPCTunnel + LadderSelector |
+| 2026-07-09 | `go test ./pkg/types/ ./pkg/config/ -count=1` (Phase B verify) | **OK** | config `path_select:` defaults |
+| 2026-07-09 | `go build -o /tmp/cloudbridge-client-check ./cmd/cloudbridge-client` | **OK** | no CLI wiring; `path_select.enabled` default false |
 | 2026-07-09 | CreateTunnel + full QUIC AUTH | **OK** | TUNNEL_QUIC_SMOKE_PASS=1 |
 | 2026-07-09 | CreateTunnel **TCP bytes** | **OK** | tunnel_bytes_ok payload echo |
 | 2026-07-09 | QUIC post-AUTH **PING/PONG** | **OK** | second stream after AUTH_OK |
+| 2026-07-09 | Phase C `go test ./pkg/pathselect/` + chaos | **OK** | C-chaos-1/2 unit; metrics; session CLI |
+| 2026-07-09 | `go build` + `session --help` | **OK** | Phase C orchestrator finish after cursor fail |
+| 2026-07-09 | Phase D.1 build + tests | **OK** | route_monitoring_enabled=false |
 | 2026-07-09 | **CLI tunnel e2e** `tunnel --smoke` | **OK** | localPort → relay endpoint → remote |
 | 2026-07-09 | **QUIC multi-peer mesh** A↔B `TO:<peer>` | **OK** | scripts/quic-mesh-smoke |
 | 2026-07-09 | **`p2p --smoke-data`** | **OK** | membership + QUIC AUTH/PING |

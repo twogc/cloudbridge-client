@@ -780,12 +780,13 @@ func (c *Client) initializeP2PManager(token *jwt.Token) error {
 		baseURL = c.config.P2PAPIBaseURL()
 	}
 	apiConfig := &api.ManagerConfig{
-		BaseURL:            baseURL,
-		InsecureSkipVerify: c.config.API.InsecureSkipVerify,
-		Timeout:            c.config.API.Timeout,
-		MaxRetries:         c.config.API.MaxRetries,
-		BackoffMultiplier:  c.config.API.BackoffMultiplier,
-		MaxBackoff:         c.config.API.MaxBackoff,
+		BaseURL:                baseURL,
+		InsecureSkipVerify:     c.config.API.InsecureSkipVerify,
+		Timeout:                c.config.API.Timeout,
+		MaxRetries:             c.config.API.MaxRetries,
+		BackoffMultiplier:      c.config.API.BackoffMultiplier,
+		MaxBackoff:             c.config.API.MaxBackoff,
+		RouteMonitoringEnabled: c.config.API.RouteMonitoringEnabled,
 	}
 
 	// Use stored token string for API manager

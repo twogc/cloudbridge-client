@@ -32,6 +32,20 @@ type Config struct {
 	DERP         DERPConfig         `mapstructure:"derp"`
 	WebSocket    WebSocketConfig    `mapstructure:"websocket"`
 	WireGuard    WireGuardConfig    `mapstructure:"wireguard"`
+	// PathSelect is the probe ladder / session path policy (GAP Phase A+).
+	// Disabled by default until Phase C CLI wiring.
+	PathSelect PathSelectConfig `mapstructure:"path_select"`
+}
+
+// PathSelectConfig is the path_select: block (see pkg/pathselect, GAP plan).
+type PathSelectConfig struct {
+	Enabled          bool          `mapstructure:"enabled"`
+	Order            []string      `mapstructure:"order"`
+	ProbeTimeout     time.Duration `mapstructure:"probe_timeout"`
+	LadderTimeout    time.Duration `mapstructure:"ladder_timeout"`
+	HealthInterval   time.Duration `mapstructure:"health_interval"`
+	FailoverCooldown time.Duration `mapstructure:"failover_cooldown"`
+	SoftFail         bool          `mapstructure:"soft_fail"`
 }
 
 // RelayConfig contains relay server connection settings
@@ -157,6 +171,10 @@ type APIConfig struct {
 	MaxRetries         int           `mapstructure:"max_retries"`
 	BackoffMultiplier  float64       `mapstructure:"backoff_multiplier"`
 	MaxBackoff         time.Duration `mapstructure:"max_backoff"`
+	// RouteMonitoringEnabled posts ConnectionRequest-shaped bodies to POST /relay/route.
+	// Relay SoT expects RelayRouteRequest (from_peer,to_peer,data,message_type) — schema mismatch
+	// caused 400 WARN spam on happy path. Default false (GAP Phase D.1).
+	RouteMonitoringEnabled bool `mapstructure:"route_monitoring_enabled"`
 }
 
 // ICEConfig contains ICE/STUN/TURN configuration

@@ -51,7 +51,7 @@ Host placeholder: `{relay}` (default prod example: `edge.2gc.ru`).
 | PUT | `/api/v1/tenants/:tid/peers/:pid/status` | OK shape |
 | POST | `/api/v1/tenants/:tid/peers/:pid/heartbeat` | OK shape (mount verify e2e) |
 | GET | `/api/v1/tenants/:tid/peers/:pid/wireguard-config` | OK shape |
-| POST | `/api/v1/relay/route` | Client Open/CloseConnection mapped here |
+| POST | `/api/v1/relay/route` | Relay: `from_peer`,`to_peer`,`data`,`message_type` (message route). **Not** ConnectionRequest monitoring. Client monitoring open **disabled by default** (`api.route_monitoring_enabled=false`, Phase D.1) |
 | GET/POST | `/api/v1/wireguard/*` | Often on HTTP mux **9090** — dual-base if 404 on 5552 |
 | WSS | `/ws` | Prefer via API/ingress, not “5553 as HTTPS” |
 

@@ -109,15 +109,16 @@ func NewManagerWithAPI(config *P2PConfig, apiConfig *api.ManagerConfig,
 
 	// Create API manager
 	apiManagerConfig := &api.ManagerConfig{
-		BaseURL:            apiConfig.BaseURL,
-		InsecureSkipVerify: apiConfig.InsecureSkipVerify,
-		Timeout:            apiConfig.Timeout,
-		MaxRetries:         apiConfig.MaxRetries,
-		BackoffMultiplier:  apiConfig.BackoffMultiplier,
-		MaxBackoff:         apiConfig.MaxBackoff,
-		Token:              token,
-		TenantID:           config.TenantID,
-		HeartbeatInterval:  heartbeatInterval,
+		BaseURL:                apiConfig.BaseURL,
+		InsecureSkipVerify:     apiConfig.InsecureSkipVerify,
+		Timeout:                apiConfig.Timeout,
+		MaxRetries:             apiConfig.MaxRetries,
+		BackoffMultiplier:      apiConfig.BackoffMultiplier,
+		MaxBackoff:             apiConfig.MaxBackoff,
+		Token:                  token,
+		TenantID:               config.TenantID,
+		HeartbeatInterval:      heartbeatInterval,
+		RouteMonitoringEnabled: apiConfig.RouteMonitoringEnabled,
 	}
 
 	apiManager := api.NewManager(apiManagerConfig, authManager, logger)
