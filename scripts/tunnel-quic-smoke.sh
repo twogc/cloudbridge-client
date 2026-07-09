@@ -19,4 +19,8 @@ echo "======== full QUIC AUTH + post-AUTH PING/PONG ========"
 go run ./scripts/quic-smoke -addr 127.0.0.1:5553 -secret "$JWT_SECRET"
 
 echo
+echo "======== QUIC multi-peer mesh TO:<peer> ========"
+bash "$ROOT/scripts/quic-mesh-smoke.sh"
+
+echo
 echo "TUNNEL_QUIC_SMOKE_PASS=1"
