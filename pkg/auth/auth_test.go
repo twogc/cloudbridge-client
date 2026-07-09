@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -58,25 +60,31 @@ func TestAuthManager_JWT_Type(t *testing.T) {
 	}
 }
 
-// TestAuthManager_OIDC_Configuration tests OIDC configuration
+// TestAuthManager_OIDC_Configuration tests OIDC configuration against a local JWKS stub.
 func TestAuthManager_OIDC_Configuration(t *testing.T) {
+	// Minimal JWKS so NewAuthManager does not hit the network (works with -short / offline CI).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+
 	config := &AuthConfig{
 		Type: "oidc",
 		OIDC: &OIDCConfig{
-			IssuerURL: "https://zitadel.example.com",
+			IssuerURL: srv.URL,
 			Audience:  "test-client-id",
-			JWKSURL:   "https://zitadel.example.com/.well-known/jwks.json",
+			JWKSURL:   srv.URL + "/.well-known/jwks.json",
 		},
 		SkipValidation: true,
 	}
 
 	manager, err := NewAuthManager(config)
 	if err != nil {
-		t.Logf("NewAuthManager error: %v", err)
+		t.Fatalf("NewAuthManager error: %v", err)
 	}
-
 	if manager == nil {
-		t.Error("Expected OIDC auth manager to be created")
+		t.Fatal("Expected OIDC auth manager to be created")
 	}
 }
 

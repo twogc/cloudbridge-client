@@ -96,10 +96,10 @@
 
 | ID | Task | Status |
 |----|------|--------|
-| WP4.1 | Discover path: client ↔ relay | [ ] |
-| WP4.2 | connections/* → route or deprecate | [ ] |
-| WP4.3 | ICE endpoints: implement or feature-flag off | [ ] |
-| WP4.4 | WireGuard dual-base if 404 on 5552 | [ ] |
+| WP4.1 | Discover path: client ↔ relay | [x] `GET …/peers` |
+| WP4.2 | connections/* → route or deprecate | [x] open/close → `/relay/route`; heartbeat deprecated with clear error |
+| WP4.3 | ICE endpoints: implement or feature-flag off | [ ] still missing on relay |
+| WP4.4 | WireGuard dual-base if 404 on 5552 | [ ] needs live smoke |
 
 ### WP5 — Security / hygiene (optional)
 

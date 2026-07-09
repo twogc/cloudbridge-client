@@ -46,12 +46,12 @@ Host placeholder: `{relay}` (default prod example: `edge.2gc.ru`).
 | GET | `/health` | OK on relay P2P API |
 | GET | `/ready` | OK |
 | POST | `/api/v1/tenants/:tid/peers/register` | OK both sides |
-| GET | `/api/v1/tenants/:tid/peers` | Relay list; client may still use `/peers/discover` → **PATH drift** |
-| GET | `/api/v1/p2p/discover` | Relay |
+| GET | `/api/v1/tenants/:tid/peers` | Client DiscoverPeers (aligned) |
+| GET | `/api/v1/p2p/discover` | Relay alternate |
 | PUT | `/api/v1/tenants/:tid/peers/:pid/status` | OK shape |
 | POST | `/api/v1/tenants/:tid/peers/:pid/heartbeat` | OK shape (mount verify e2e) |
 | GET | `/api/v1/tenants/:tid/peers/:pid/wireguard-config` | OK shape |
-| POST | `/api/v1/relay/route` | Relay; client `connections/*` → **PATH drift** |
+| POST | `/api/v1/relay/route` | Client Open/CloseConnection mapped here |
 | GET/POST | `/api/v1/wireguard/*` | Often on HTTP mux **9090** — dual-base if 404 on 5552 |
 | WSS | `/ws` | Prefer via API/ingress, not “5553 as HTTPS” |
 
@@ -62,7 +62,7 @@ Host placeholder: `{relay}` (default prod example: `edge.2gc.ru`).
 | `…/ice-credentials` | not found | implement on relay **or** disable client |
 | `/api/v1/ice/candidates` | not found | same |
 | `/api/v1/p2p/connect` | not found | same |
-| `/api/v1/relay/connections/{open,close,heartbeat}` | not found (use `/relay/route`) | map or deprecate |
+| ~~`/api/v1/relay/connections/*`~~ | mapped to `/relay/route` + peer heartbeat | client WP4 partial |
 
 ---
 

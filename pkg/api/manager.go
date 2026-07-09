@@ -548,8 +548,12 @@ func (m *Manager) RequestP2PConnection(req *P2PConnectionRequest) error {
 
 // SendHeartbeat sends a heartbeat to maintain peer connection
 func (m *Manager) SendHeartbeat(ctx context.Context, tenantID, peerID, token string, req *HeartbeatRequest) (*HeartbeatResponse, error) {
-	// Use heartbeat URL from config
-	url := fmt.Sprintf("%s/api/v1/tenants/%s/peers/%s/heartbeat", m.config.HeartbeatURL, tenantID, peerID)
+	// Always build path from REST base (BaseURL), not a pre-built register URL.
+	base := strings.TrimSuffix(m.client.baseURL, "/")
+	if base == "" && m.config != nil {
+		base = strings.TrimSuffix(m.config.BaseURL, "/")
+	}
+	url := fmt.Sprintf("%s/api/v1/tenants/%s/peers/%s/heartbeat", base, tenantID, peerID)
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {

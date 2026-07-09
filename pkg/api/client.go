@@ -196,9 +196,11 @@ func (c *Client) UpdatePeerStatus(ctx context.Context, tenantID, peerID, token s
 	return nil, fmt.Errorf("unexpected response type")
 }
 
-// DiscoverPeers discovers peers in the tenant
+// DiscoverPeers discovers peers in the tenant.
+// Relay (p2p_api): GET /api/v1/tenants/:tenant_id/peers
+// (legacy client path …/peers/discover is not registered on current relay).
 func (c *Client) DiscoverPeers(ctx context.Context, tenantID, token string) (*DiscoverResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/tenants/%s/peers/discover", c.baseURL, tenantID)
+	url := fmt.Sprintf("%s/api/v1/tenants/%s/peers", c.baseURL, tenantID)
 
 	resp, err := c.doRequestWithRetry(ctx, "GET", url, token, nil, &DiscoverResponse{})
 	if err != nil {
@@ -210,25 +212,27 @@ func (c *Client) DiscoverPeers(ctx context.Context, tenantID, token string) (*Di
 	return nil, fmt.Errorf("unexpected response type")
 }
 
-// OpenConnection notifies relay about an opened logical connection (increments gauge)
+// OpenConnection notifies relay about routing/open intent.
+// Relay exposes POST /api/v1/relay/route (not …/connections/open).
 func (c *Client) OpenConnection(ctx context.Context, token string, req *ConnectionRequest) error {
-	url := fmt.Sprintf("%s/api/v1/relay/connections/open", c.baseURL)
+	url := fmt.Sprintf("%s/api/v1/relay/route", c.baseURL)
 	_, err := c.doRequestWithRetry(ctx, "POST", url, token, req, nil)
 	return err
 }
 
-// CloseConnection notifies relay about a closed logical connection (decrements gauge)
+// CloseConnection best-effort close notification.
+// Current relay has no dedicated connections/close; reuses route endpoint with close semantics in body if server supports it.
 func (c *Client) CloseConnection(ctx context.Context, token string, req *ConnectionRequest) error {
-	url := fmt.Sprintf("%s/api/v1/relay/connections/close", c.baseURL)
+	url := fmt.Sprintf("%s/api/v1/relay/route", c.baseURL)
 	_, err := c.doRequestWithRetry(ctx, "POST", url, token, req, nil)
 	return err
 }
 
-// HeartbeatConnection sends a heartbeat for an open logical connection
+// HeartbeatConnection is deprecated against current relay.
+// Relay has no /api/v1/relay/connections/heartbeat; use
+// POST /api/v1/tenants/{tenant_id}/peers/{peer_id}/heartbeat via Manager.SendHeartbeat.
 func (c *Client) HeartbeatConnection(ctx context.Context, token string, req *HeartbeatRequest) error {
-	url := fmt.Sprintf("%s/api/v1/relay/connections/heartbeat", c.baseURL)
-	_, err := c.doRequestWithRetry(ctx, "POST", url, token, req, nil)
-	return err
+	return fmt.Errorf("relay does not expose /api/v1/relay/connections/heartbeat; use peer heartbeat API")
 }
 
 // doRequestWithRetry performs HTTP request with retry logic

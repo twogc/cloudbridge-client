@@ -51,7 +51,9 @@ See [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md).
 | 2026-07-09 | `go test ./pkg/types/ ./pkg/config/ ./pkg/relay/transport/ -count=1` | **OK** | Go 1.25.12 |
 | 2026-07-09 | `go test ./pkg/onboarding/ -count=1` | **OK** | ports assertions |
 | 2026-07-09 | `go build ./cmd/cloudbridge-client` | **OK** | after WP3 |
-| | `go test ./... -short -count=1` | | not run yet |
+| 2026-07-09 | `go test ./... -short` | **partial FAIL** | auth OIDC network — fixed offline mock |
+| 2026-07-09 | `go test ./pkg/auth/ …` after OIDC fix | **OK** | |
+| 2026-07-09 | WP4 path align + build | **OK** | discover/route |
 | | smoke REST :5552 | | |
 | | smoke gRPC :8444 | | |
 | | smoke `p2p` CLI | | |
