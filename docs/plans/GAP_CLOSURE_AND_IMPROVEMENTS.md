@@ -19,7 +19,7 @@
 |-------|--------|--------|
 | A | Foundation: `pkg/pathselect` | [x] **done** 2026-07-09 |
 | B | Adapters: RelayQUIC + GRPCTunnel | [x] **done** 2026-07-09 |
-| C | Selector + CLI + chaos smokes (**L1 milestone**) | [x] **partial** 2026-07-09 — chaos unit + `session --smoke`; live iptables optional |
+| C | Selector + CLI + chaos smokes (**L1 milestone**) | [x] **partial→stronger** — unit chaos + live `session --smoke` + `RUN_PATHSELECT=1` in all-smoke; iptables optional |
 | D | Control-plane hygiene (WP4 + OIDC) | [~] D.1+D.2+D.5 done 2026-07-09; D.4 live OIDC open |
 | E | ICE / STUN / TURN ladder | [ ] |
 | F | Handover + session health | [ ] |

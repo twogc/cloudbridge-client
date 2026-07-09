@@ -8,7 +8,7 @@
 | Area | State |
 |------|-------|
 | Codebase size | ~20k LOC Go + ~6k tests; single main binary |
-| CLI surface | `p2p`, `tunnel`, `service`, `wireguard`, `version` |
+| CLI surface | `p2p`, `tunnel`, `session`, `service`, `wireguard`, `version` |
 | Docs | **Rebuilding** under `docs/` + openwiki (this pass) |
 | Port/API contract vs relay | **WP0–WP2 largely done** (defaults + gRPC/QUIC dial helpers); live smoke still open |
 | Unit tests | `pkg/types`, `pkg/config` updated; re-run full suite and record |
@@ -39,7 +39,8 @@
 | REST path drift discover (LIVE) / ICE (N/A) | P2 | CONTRACT; ICE wait relay |
 | ~~No Session / PathSelector foundation~~ | — | Phase A [x] `pkg/pathselect` |
 | ~~PathSelector foundation / adapters / unit chaos~~ | — | Phase A–C partial [x] |
-| Live path_select in all-smoke / real iptables chaos | P2 | optional |
+| ~~Live pathselect in all-smoke~~ | — | `RUN_PATHSELECT=1` step 7 [x] |
+| Real iptables chaos (block 5553/8444) | P2 | optional ops |
 | OIDC live e2e | P2 | D.4 residual; lab-hmac is L0 |
 | MASQUE/handover/SLO unwired | P2 | GAP Phase F–G |
 | Go 1.25.3 vs installer 1.25.12 | P2 | WP5 |
@@ -98,6 +99,7 @@ Defaults off: `path_select.enabled`, `api.route_monitoring_enabled`, `ice.signal
 | 2026-07-09 | local-smoke relay + `all-smoke.sh` | **ALL_SMOKE_PASS=1** | lab-hmac; D.1 skip route open |
 | 2026-07-09 | `session --smoke --force` live | **SESSION_SMOKE_PASS=1** | active_path=relay_quic |
 | 2026-07-09 | D.3 p2p smoke heartbeat | **OK** | interval 10s from YAML; no skip warn |
+| 2026-07-09 | `RUN_PATHSELECT=1 all-smoke.sh` | **ALL_SMOKE_PASS=1** | step 7 SESSION_SMOKE_PASS active_path=relay_quic |
 | 2026-07-09 | **CLI tunnel e2e** `tunnel --smoke` | **OK** | localPort → relay endpoint → remote |
 | 2026-07-09 | **QUIC multi-peer mesh** A↔B `TO:<peer>` | **OK** | scripts/quic-mesh-smoke |
 | 2026-07-09 | **`p2p --smoke-data`** | **OK** | membership + QUIC AUTH/PING |

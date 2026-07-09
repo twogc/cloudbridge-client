@@ -9,20 +9,23 @@
 #   SKIP_CLI_TUNNEL=1 ./scripts/all-smoke.sh
 #   SKIP_MESH_PEERS=1 ./scripts/all-smoke.sh   # skip 2-peer membership script
 #   P2P_SMOKE_DATA=0 ./scripts/all-smoke.sh    # membership only (no --smoke-data)
+#   RUN_PATHSELECT=1 ./scripts/all-smoke.sh  # also session --smoke --force (Phase C)
 #
 # Env:
 #   JWT_SECRET (default test-secret)
 #   SMOKE_RELAY_URL (default http://127.0.0.1:5552)
 #   SMOKE_DATA_SOFT=1  → p2p --smoke-data warns instead of fail
+#   RUN_PATHSELECT=1   → step 7 pathselect ladder against live relay
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export PATH="${HOME}/.local/go-install/go/bin:${PATH}"
+export PATH="/usr/local/go/bin:${HOME}/.local/go-install/go/bin:${PATH}"
 export JWT_SECRET="${JWT_SECRET:-test-secret}"
 export CLOUDBRIDGE_TOKEN="${CLOUDBRIDGE_TOKEN:-local-smoke-grpc-token}"
 BASE="${SMOKE_RELAY_URL:-http://127.0.0.1:5552}"
 WORKDIR="${SMOKE_DIR:-/tmp/cloudbridge-all-smoke}"
 BIN="${CLIENT_BIN:-${ROOT}/bin/cloudbridge-client}"
 P2P_SMOKE_DATA="${P2P_SMOKE_DATA:-1}"
+RUN_PATHSELECT="${RUN_PATHSELECT:-0}"
 mkdir -p "$WORKDIR" "$(dirname "$BIN")"
 
 pass() { echo "ALL_SMOKE_STEP_OK=$*"; }
@@ -80,6 +83,9 @@ api:
   heartbeat_url: "${BASE}"
   insecure_skip_verify: true
   timeout: 15s
+  route_monitoring_enabled: false
+ice:
+  signaling_enabled: false
 logging:
   level: info
   format: text
@@ -90,6 +96,12 @@ wireguard:
   enabled: false
 p2p:
   heartbeat_interval: 10s
+  heartbeat_timeout: 5s
+path_select:
+  enabled: false
+  order: [relay_quic, grpc_tunnel]
+  probe_timeout: 5s
+  ladder_timeout: 45s
 rate_limiting:
   max_retries: 2
   backoff_multiplier: 1.5
@@ -154,6 +166,27 @@ echo "======== 6) QUIC multi-peer mesh TO ========"
 bash "$ROOT/scripts/quic-mesh-smoke.sh" 2>&1 | tee "${WORKDIR}/quic-mesh.log"
 grep -q 'QUIC_MESH_SMOKE_PASS=1' "${WORKDIR}/quic-mesh.log" || fail "quic-mesh"
 pass "quic_mesh"
+
+if [[ "$RUN_PATHSELECT" == "1" ]]; then
+  echo
+  echo "======== 7) pathselect session --smoke --force ========"
+  PS_TOK=$(make_token "pathselect-$(date +%s)")
+  PS_CFG="${WORKDIR}/pathselect.yaml"
+  write_cfg "$PS_CFG" "$PS_TOK"
+  "$BIN" session --smoke --force \
+    -c "$PS_CFG" -t "$PS_TOK" \
+    --tenant default --peer-id "pathselect-smoke" \
+    --insecure-skip-tls-verify \
+    --log-level info \
+    2>&1 | tee "${WORKDIR}/pathselect.log"
+  grep -q 'SESSION_SMOKE_PASS=1' "${WORKDIR}/pathselect.log" || fail "pathselect session smoke"
+  # Prefer relay_quic when UDP :5553 is up; accept grpc_tunnel if QUIC blocked
+  grep -qE 'active_path=(relay_quic|grpc_tunnel)' "${WORKDIR}/pathselect.log" \
+    || fail "pathselect active_path missing"
+  pass "pathselect"
+else
+  echo "(skip pathselect: set RUN_PATHSELECT=1 to enable Phase C live ladder)"
+fi
 
 echo
 echo "ALL_SMOKE_PASS=1"
