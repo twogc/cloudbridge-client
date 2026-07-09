@@ -286,9 +286,12 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
-	// Establish connection
+	// Establish connection on legacy/main TCP (canonical 5550), not P2P QUIC UDP port.
 	var conn net.Conn
-	address := net.JoinHostPort(c.config.Relay.Host, strconv.Itoa(c.config.Relay.Port))
+	address := c.config.LegacyTCPAddr()
+	if address == "" {
+		address = net.JoinHostPort(c.config.Relay.Host, strconv.Itoa(c.config.EffectiveLegacyTCPPort()))
+	}
 	if tlsConfig != nil {
 		conn, err = tls.Dial("tcp", address, tlsConfig)
 	} else {
@@ -760,10 +763,13 @@ func (c *Client) initializeP2PManager(token *jwt.Token) error {
 	// Create P2P logger
 	p2pLogger := &p2pLogger{client: c}
 
-	// Create P2P manager with HTTP API support
-	// Use HTTPS API on port 30082 for P2P operations
+	// REST base = P2P API :5552 (docs/CONTRACT_CLIENT_RELAY.md)
+	baseURL := c.config.API.BaseURL
+	if baseURL == "" {
+		baseURL = c.config.P2PAPIBaseURL()
+	}
 	apiConfig := &api.ManagerConfig{
-		BaseURL:            c.config.API.BaseURL,
+		BaseURL:            baseURL,
 		InsecureSkipVerify: c.config.API.InsecureSkipVerify,
 		Timeout:            c.config.API.Timeout,
 		MaxRetries:         c.config.API.MaxRetries,
@@ -773,6 +779,8 @@ func (c *Client) initializeP2PManager(token *jwt.Token) error {
 
 	// Use stored token string for API manager
 	c.p2pManager = p2p.NewManagerWithAPI(p2pConfig, apiConfig, c.authManager, c.tokenString, p2pLogger)
+	// P2P QUIC UDP dial — ports.quic (5553), not REST/gRPC ports
+	c.p2pManager.SetRelayQUICEndpoint(c.config.Relay.Host, c.config.EffectiveP2PQUICPort())
 
 	// Start P2P manager
 	if err := c.p2pManager.Start(); err != nil {

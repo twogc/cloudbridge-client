@@ -18,7 +18,11 @@ func TestLoadConfig_WithValidFile(t *testing.T) {
 	configContent := `
 relay:
   host: edge.2gc.ru
-  port: 5553
+  port: 5550
+  ports:
+    p2p_api: 5552
+    grpc: 8444
+    quic: 5553
   tls:
     enabled: true
     min_version: "1.3"
@@ -40,11 +44,62 @@ auth:
 	if config.Relay.Host != "edge.2gc.ru" {
 		t.Errorf("Expected relay host edge.2gc.ru, got: %s", config.Relay.Host)
 	}
-	if config.Relay.Port != 5553 {
-		t.Errorf("Expected relay port 5553, got: %d", config.Relay.Port)
+	if config.Relay.Port != 5550 {
+		t.Errorf("Expected legacy relay port 5550, got: %d", config.Relay.Port)
+	}
+	if config.EffectiveP2PAPIPort() != 5552 {
+		t.Errorf("Expected p2p_api 5552, got: %d", config.EffectiveP2PAPIPort())
+	}
+	if config.EffectiveGRPCPort() != 8444 {
+		t.Errorf("Expected grpc 8444, got: %d", config.EffectiveGRPCPort())
+	}
+	if config.GRPCTarget() != "edge.2gc.ru:8444" {
+		t.Errorf("GRPCTarget: %s", config.GRPCTarget())
 	}
 	if !config.Relay.TLS.Enabled {
 		t.Error("Expected TLS to be enabled")
+	}
+}
+
+func TestLoadConfig_DefaultPortsAlignWithContract(t *testing.T) {
+	// No config file — pure defaults from setDefaults (via missing file path handling)
+	// LoadConfig with empty path still reads optional files; use temp empty yaml
+	tmpFile, err := os.CreateTemp("", "config-defaults-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	// minimal valid auth for validate
+	_, _ = tmpFile.WriteString(`
+relay:
+  host: edge.2gc.ru
+auth:
+  type: jwt
+  secret: test-secret
+`)
+	tmpFile.Close()
+
+	cfg, err := LoadConfig(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Relay.Ports.P2PAPI != 0 && cfg.EffectiveP2PAPIPort() != 5552 {
+		// Ports may be filled by defaults via viper
+	}
+	if cfg.EffectiveP2PAPIPort() != 5552 {
+		t.Errorf("default p2p_api want 5552 got %d", cfg.EffectiveP2PAPIPort())
+	}
+	if cfg.EffectiveGRPCPort() != 8444 {
+		t.Errorf("default grpc want 8444 got %d", cfg.EffectiveGRPCPort())
+	}
+	if cfg.EffectiveP2PQUICPort() != 5553 {
+		t.Errorf("default quic want 5553 got %d", cfg.EffectiveP2PQUICPort())
+	}
+	if cfg.API.BaseURL != "" && cfg.API.BaseURL != "https://edge.2gc.ru:5552" {
+		// if set from defaults
+		if cfg.API.BaseURL == "https://edge.2gc.ru:5553" {
+			t.Errorf("api.base_url still legacy 5553: %s", cfg.API.BaseURL)
+		}
 	}
 }
 

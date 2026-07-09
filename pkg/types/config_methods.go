@@ -30,10 +30,13 @@ func (c *Config) SaveToFile(path string) error {
 	v.Set("relay.tls.client_key", c.Relay.TLS.ClientKey)
 	v.Set("relay.tls.server_name", c.Relay.TLS.ServerName)
 
-	// Relay ports
+	// Relay ports (see docs/CONTRACT_CLIENT_RELAY.md)
 	v.Set("relay.ports.http_api", c.Relay.Ports.HTTPAPI)
+	v.Set("relay.ports.https_api", c.Relay.Ports.HTTPSAPI)
 	v.Set("relay.ports.p2p_api", c.Relay.Ports.P2PAPI)
 	v.Set("relay.ports.quic", c.Relay.Ports.QUIC)
+	v.Set("relay.ports.quic_main", c.Relay.Ports.QUICMain)
+	v.Set("relay.ports.grpc", c.Relay.Ports.GRPC)
 	v.Set("relay.ports.stun", c.Relay.Ports.STUN)
 	v.Set("relay.ports.masque", c.Relay.Ports.MASQUE)
 	v.Set("relay.ports.enhanced_quic", c.Relay.Ports.EnhancedQUIC)

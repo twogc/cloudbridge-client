@@ -1,5 +1,8 @@
 # CloudBridge Client Architecture
 
+
+> **Ports / contract:** see repository root [`docs/CONTRACT_CLIENT_RELAY.md`](../../docs/CONTRACT_CLIENT_RELAY.md). Packaging `config.yaml` uses canonical ports (REST 5552, gRPC 8444, QUIC 5553 UDP).
+
 ## Overview
 
 CloudBridge Client is a cross-platform P2P mesh networking client that enables secure, high-performance peer-to-peer connections through relay servers. The architecture is designed for enterprise-grade reliability, security, and performance.

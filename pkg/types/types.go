@@ -43,17 +43,39 @@ type RelayConfig struct {
 	TLS     TLSConfig     `mapstructure:"tls"`
 }
 
-// RelayPorts contains all relay server ports
+// RelayPorts contains all relay server ports.
+// Canonical mapping: docs/CONTRACT_CLIENT_RELAY.md (align with relay port-scheme).
 type RelayPorts struct {
-	HTTPAPI      int `mapstructure:"http_api"`
-	P2PAPI       int `mapstructure:"p2p_api"`
-	QUIC         int `mapstructure:"quic"`
-	STUN         int `mapstructure:"stun"`
-	MASQUE       int `mapstructure:"masque"`
-	EnhancedQUIC int `mapstructure:"enhanced_quic"`
-	TURN         int `mapstructure:"turn"`
-	DERP         int `mapstructure:"derp"`
+	HTTPAPI      int `mapstructure:"http_api"`       // 9090 TCP — HTTP API / health
+	HTTPSAPI     int `mapstructure:"https_api"`      // 5553 TCP — HTTPS API
+	P2PAPI       int `mapstructure:"p2p_api"`        // 5552 TCP — P2P REST
+	QUIC         int `mapstructure:"quic"`           // 5553 UDP — P2P QUIC
+	QUICMain     int `mapstructure:"quic_main"`      // 9090 UDP — main QUIC transport
+	GRPC         int `mapstructure:"grpc"`           // 8444 TCP — gRPC control plane
+	STUN         int `mapstructure:"stun"`           // 19302 UDP
+	MASQUE       int `mapstructure:"masque"`         // 8443
+	EnhancedQUIC int `mapstructure:"enhanced_quic"`  // 9092 UDP
+	TURN         int `mapstructure:"turn"`           // 3478
+	DERP         int `mapstructure:"derp"`           // 3479
 }
+
+// Canonical default ports (relay installer port-scheme).
+const (
+	DefaultLegacyTCPPort = 5550
+	DefaultP2PAPIPort    = 5552
+	DefaultHTTPSAPIPort  = 5553
+	DefaultP2PQUICPort   = 5553
+	DefaultHTTPAPIPort   = 9090
+	DefaultQUICMainPort  = 9090
+	DefaultGRPCPort      = 8444
+	DefaultMASQUEPort    = 8443
+	DefaultSTUNPort      = 19302
+	DefaultTURNPort      = 3478
+	DefaultDERPPort      = 3479
+	DefaultEnhancedQUIC  = 9092
+	DefaultWireGuardPort = 51820
+	DefaultClientMetrics = 9091
+)
 
 // TLSConfig contains TLS-specific settings
 type TLSConfig struct {

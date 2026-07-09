@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +40,9 @@ type Manager struct {
 	relaySessionID  string
 	connections     map[string]*PeerConnection
 	heartbeatTicker *time.Ticker
+	// Relay QUIC dial target (from types.Config / CONTRACT_CLIENT_RELAY)
+	relayHost     string
+	relayQUICPort int
 	// L3-overlay network fields
 	peerIP          string
 	tenantCIDR      string
@@ -1108,9 +1114,34 @@ func (m *Manager) MonitorL3OverlayHealth() {
 	}
 }
 
-// deriveRelayAddrFromConfig извлекает адрес релэя из конфигурации
+// SetRelayQUICEndpoint sets the host and UDP port used for P2P QUIC dial to the relay.
+// Canonical port is 5553 (docs/CONTRACT_CLIENT_RELAY.md).
+func (m *Manager) SetRelayQUICEndpoint(host string, quicPort int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.relayHost = strings.TrimSpace(host)
+	if quicPort > 0 {
+		m.relayQUICPort = quicPort
+	}
+}
+
+// deriveRelayAddrFromConfig returns host:port for P2P QUIC (UDP).
+// Prefer SetRelayQUICEndpoint / fields; fall back to NetworkConfig.QUICPort; never hardcode production host.
 func (m *Manager) deriveRelayAddrFromConfig() string {
-	// TODO: Реализовать извлечение адреса из BaseURL конфигурации
-	// Пока используем дефолтный адрес для тестирования
-	return "edge.2gc.ru:5553"
+	m.mu.RLock()
+	host := m.relayHost
+	port := m.relayQUICPort
+	m.mu.RUnlock()
+
+	if port <= 0 && m.config != nil && m.config.NetworkConfig != nil && m.config.NetworkConfig.QUICPort > 0 {
+		port = m.config.NetworkConfig.QUICPort
+	}
+	if port <= 0 {
+		port = 5553 // DefaultP2PQUICPort
+	}
+	if host == "" {
+		// Localhost last resort for unit tests without full wiring
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
 }

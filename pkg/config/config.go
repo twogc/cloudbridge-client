@@ -55,35 +55,38 @@ func LoadConfig(configPath string) (*types.Config, error) {
 	return &config, nil
 }
 
-// setDefaults sets default configuration values
+// setDefaults sets default configuration values.
+// Canonical client↔relay ports: docs/CONTRACT_CLIENT_RELAY.md
+// (aligned with cloudbridge-relay-installer openwiki/port-scheme.md).
 func setDefaults() {
-	// Relay configuration - синхронизировано с реальными портами edge.2gc.ru
-	viper.SetDefault("relay.host", "edge.2gc.ru")       // Реальный домен
-	viper.SetDefault("relay.port", 5553)                // P2P QUIC порт
-	viper.SetDefault("relay.ports.http_api", 5553)      // P2P API через QUIC
-	viper.SetDefault("relay.ports.p2p_api", 5553)       // P2P API прямой доступ
-	viper.SetDefault("relay.ports.quic", 5553)          // QUIC Transport
-	viper.SetDefault("relay.ports.stun", 19302)         // STUN Server (реально открыт)
-	viper.SetDefault("relay.ports.masque", 8443)        // MASQUE Proxy через nginx
-	viper.SetDefault("relay.ports.enhanced_quic", 9092) // Enhanced QUIC (реально открыт)
-	viper.SetDefault("relay.ports.turn", 3478)          // TURN Server
-	viper.SetDefault("relay.ports.derp", 3479)          // DERP Server
+	// Relay — role-specific ports (do not use a single port for REST+gRPC+QUIC)
+	viper.SetDefault("relay.host", "edge.2gc.ru")
+	viper.SetDefault("relay.port", types.DefaultLegacyTCPPort) // 5550 main/legacy TCP
+	viper.SetDefault("relay.ports.http_api", types.DefaultHTTPAPIPort)
+	viper.SetDefault("relay.ports.https_api", types.DefaultHTTPSAPIPort)
+	viper.SetDefault("relay.ports.p2p_api", types.DefaultP2PAPIPort)
+	viper.SetDefault("relay.ports.quic", types.DefaultP2PQUICPort) // 5553 UDP
+	viper.SetDefault("relay.ports.quic_main", types.DefaultQUICMainPort)
+	viper.SetDefault("relay.ports.grpc", types.DefaultGRPCPort)
+	viper.SetDefault("relay.ports.stun", types.DefaultSTUNPort)
+	viper.SetDefault("relay.ports.masque", types.DefaultMASQUEPort)
+	viper.SetDefault("relay.ports.enhanced_quic", types.DefaultEnhancedQUIC)
+	viper.SetDefault("relay.ports.turn", types.DefaultTURNPort)
+	viper.SetDefault("relay.ports.derp", types.DefaultDERPPort)
 	viper.SetDefault("relay.timeout", "30s")
-	// Enable TLS by default for secure communications
 	viper.SetDefault("relay.tls.enabled", true)
 	viper.SetDefault("relay.tls.min_version", "1.3")
-	// Verify relay server certificate by default
 	viper.SetDefault("relay.tls.verify_cert", true)
-	viper.SetDefault("relay.tls.server_name", "b1.2gc.space") // Используем имя из серверного сертификата
+	// server_name must match cert SAN for the deployment; override per env
+	viper.SetDefault("relay.tls.server_name", "edge.2gc.ru")
 
 	// Authentication
 	viper.SetDefault("auth.type", "jwt")
 	viper.SetDefault("auth.fallback_secret", "")
 	viper.SetDefault("auth.skip_validation", false)
-	// OIDC (Zitadel)
-	viper.SetDefault("auth.oidc.issuer_url", "") // напр. https://<your-zitadel>
-	viper.SetDefault("auth.oidc.audience", "")   // ваш client_id
-	// auth.secret используется только при type=jwt
+	// OIDC (Zitadel) — preferred for production with current relay
+	viper.SetDefault("auth.oidc.issuer_url", "")
+	viper.SetDefault("auth.oidc.audience", "")
 
 	// Rate limiting
 	viper.SetDefault("rate_limiting.enabled", true)
@@ -96,26 +99,26 @@ func setDefaults() {
 	viper.SetDefault("logging.format", "json")
 	viper.SetDefault("logging.output", "stdout")
 
-	// Metrics and Pushgateway
+	// Metrics (local client exporter; not relay :5551)
 	viper.SetDefault("metrics.enabled", true)
-	viper.SetDefault("metrics.prometheus_port", 9091)
+	viper.SetDefault("metrics.prometheus_port", types.DefaultClientMetrics)
 	viper.SetDefault("metrics.pushgateway.enabled", false)
 	viper.SetDefault("metrics.pushgateway.push_url", "http://localhost:9091")
 	viper.SetDefault("metrics.pushgateway.job_name", "cloudbridge-client")
 	viper.SetDefault("metrics.pushgateway.instance", "")
 	viper.SetDefault("metrics.pushgateway.push_interval", "30s")
 
-	// API configuration - синхронизировано с edge.2gc.ru
-	viper.SetDefault("api.base_url", "https://edge.2gc.ru:5553")      // HTTPS основной домен через QUIC порт
-	viper.SetDefault("api.p2p_api_url", "https://edge.2gc.ru:5553")   // P2P API через QUIC порт
-	viper.SetDefault("api.heartbeat_url", "https://edge.2gc.ru:5553") // Heartbeat через QUIC порт
-	viper.SetDefault("api.insecure_skip_verify", false)               // Проверять SSL сертификаты
+	// REST base = P2P API :5552 (not QUIC UDP :5553)
+	viper.SetDefault("api.base_url", "https://edge.2gc.ru:5552")
+	viper.SetDefault("api.p2p_api_url", "https://edge.2gc.ru:5552")
+	viper.SetDefault("api.heartbeat_url", "https://edge.2gc.ru:5552")
+	viper.SetDefault("api.insecure_skip_verify", false)
 	viper.SetDefault("api.timeout", "30s")
 	viper.SetDefault("api.max_retries", 3)
 	viper.SetDefault("api.backoff_multiplier", 2.0)
 	viper.SetDefault("api.max_backoff", "60s")
 
-	// ICE configuration - синхронизировано с реальными серверами
+	// ICE
 	viper.SetDefault("ice.stun_servers", []string{"edge.2gc.ru:19302", "stun.l.google.com:19302"})
 	viper.SetDefault("ice.turn_servers", []string{"edge.2gc.ru:3478"})
 	viper.SetDefault("ice.derp_servers", []string{"edge.2gc.ru:3479"})
@@ -124,17 +127,17 @@ func setDefaults() {
 	viper.SetDefault("ice.connectivity_checks", true)
 	viper.SetDefault("ice.candidate_gathering", true)
 
-	// QUIC configuration
+	// QUIC
 	viper.SetDefault("quic.handshake_timeout", "10s")
 	viper.SetDefault("quic.idle_timeout", "30s")
 	viper.SetDefault("quic.max_streams", 100)
 	viper.SetDefault("quic.max_stream_data", 1048576) // 1MB
 	viper.SetDefault("quic.keep_alive_period", "15s")
-	viper.SetDefault("quic.insecure_skip_verify", true)
+	viper.SetDefault("quic.insecure_skip_verify", false)
 	viper.SetDefault("quic.masque_support", true)
 	viper.SetDefault("quic.http_datagrams", true)
 
-	// P2P configuration
+	// P2P
 	viper.SetDefault("p2p.max_connections", 1000)
 	viper.SetDefault("p2p.session_timeout", "300s")
 	viper.SetDefault("p2p.peer_discovery_interval", "30s")
@@ -146,33 +149,33 @@ func setDefaults() {
 	viper.SetDefault("p2p.derp_fallback", true)
 	viper.SetDefault("p2p.websocket_fallback", true)
 
-	// TURN configuration
+	// TURN — no weak default password; set via config/env for real deployments
 	viper.SetDefault("turn.enabled", true)
-	viper.SetDefault("turn.servers", []string{"localhost:3478"})
-	viper.SetDefault("turn.username", "cloudbridge")
-	viper.SetDefault("turn.password", "cloudbridge123")
+	viper.SetDefault("turn.servers", []string{"edge.2gc.ru:3478"})
+	viper.SetDefault("turn.username", "")
+	viper.SetDefault("turn.password", "")
 	viper.SetDefault("turn.realm", "cloudbridge.local")
 	viper.SetDefault("turn.timeout", "30s")
 	viper.SetDefault("turn.max_allocations", 10)
 
-	// DERP configuration
+	// DERP
 	viper.SetDefault("derp.enabled", true)
-	viper.SetDefault("derp.servers", []string{"localhost:3479"})
+	viper.SetDefault("derp.servers", []string{"edge.2gc.ru:3479"})
 	viper.SetDefault("derp.timeout", "30s")
 	viper.SetDefault("derp.max_connections", 100)
 	viper.SetDefault("derp.fallback_priority", 1)
 
-	// WebSocket configuration
+	// WebSocket via REST API port
 	viper.SetDefault("websocket.enabled", true)
-	viper.SetDefault("websocket.endpoint", "wss://edge.2gc.ru:5553/ws") // Правильный WebSocket endpoint
+	viper.SetDefault("websocket.endpoint", "wss://edge.2gc.ru:5552/ws")
 	viper.SetDefault("websocket.timeout", "30s")
 	viper.SetDefault("websocket.ping_interval", "15s")
 	viper.SetDefault("websocket.max_reconnect_attempts", 5)
 
-	// WireGuard configuration
+	// WireGuard
 	viper.SetDefault("wireguard.enabled", true)
 	viper.SetDefault("wireguard.interface_name", "wg-cloudbridge")
-	viper.SetDefault("wireguard.port", 51820)
+	viper.SetDefault("wireguard.port", types.DefaultWireGuardPort)
 	viper.SetDefault("wireguard.mtu", 1420)
 	viper.SetDefault("wireguard.persistent_keepalive", "25s")
 }

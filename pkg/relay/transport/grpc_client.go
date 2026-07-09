@@ -53,7 +53,12 @@ func (gc *GRPCClient) Connect() error {
 		return fmt.Errorf("already connected")
 	}
 
-	target := fmt.Sprintf("%s:%d", gc.config.Relay.Host, gc.config.Relay.Port)
+	// gRPC control plane is ports.grpc (canonical 8444), not relay.port / QUIC.
+	// See docs/CONTRACT_CLIENT_RELAY.md
+	target := gc.config.GRPCTarget()
+	if target == "" {
+		return fmt.Errorf("relay host is required for gRPC dial")
+	}
 
 	// Build connection options
 	opts, err := gc.buildConnectionOptions()

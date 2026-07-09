@@ -148,12 +148,21 @@ func (w *SetupWizard) configureManual() (*types.Config, error) {
 	fmt.Println("────────────────────────────────────────")
 	fmt.Println()
 
-	host, err := w.promptString("Relay server URL", "edge.2gc.ru")
+	host, err := w.promptString("Relay server host", "edge.2gc.ru")
 	if err != nil {
 		return nil, err
 	}
 
-	port, err := w.promptInt("Relay server port", 5552, 1, 65535)
+	// Role-specific ports (docs/CONTRACT_CLIENT_RELAY.md) — REST is not QUIC UDP.
+	p2pAPIPort, err := w.promptInt("P2P REST API port", types.DefaultP2PAPIPort, 1, 65535)
+	if err != nil {
+		return nil, err
+	}
+	grpcPort, err := w.promptInt("gRPC control port", types.DefaultGRPCPort, 1, 65535)
+	if err != nil {
+		return nil, err
+	}
+	quicPort, err := w.promptInt("P2P QUIC UDP port", types.DefaultP2PQUICPort, 1, 65535)
 	if err != nil {
 		return nil, err
 	}
@@ -181,14 +190,28 @@ func (w *SetupWizard) configureManual() (*types.Config, error) {
 		return nil, err
 	}
 
-	// Build config
+	// Build config with canonical port roles
 	cfg := &types.Config{
 		Relay: types.RelayConfig{
 			Host: host,
-			Port: port,
+			Port: types.DefaultLegacyTCPPort,
+			Ports: types.RelayPorts{
+				HTTPAPI:      types.DefaultHTTPAPIPort,
+				HTTPSAPI:     types.DefaultHTTPSAPIPort,
+				P2PAPI:       p2pAPIPort,
+				QUIC:         quicPort,
+				QUICMain:     types.DefaultQUICMainPort,
+				GRPC:         grpcPort,
+				STUN:         types.DefaultSTUNPort,
+				MASQUE:       types.DefaultMASQUEPort,
+				EnhancedQUIC: types.DefaultEnhancedQUIC,
+				TURN:         types.DefaultTURNPort,
+				DERP:         types.DefaultDERPPort,
+			},
 			TLS: types.TLSConfig{
-				Enabled: useTLS,
+				Enabled:    useTLS,
 				VerifyCert: true,
+				ServerName: host,
 			},
 		},
 		Auth: types.AuthConfig{
@@ -200,7 +223,13 @@ func (w *SetupWizard) configureManual() (*types.Config, error) {
 		},
 		WireGuard: types.WireGuardConfig{
 			InterfaceName: "cloudbridge0",
+			Port:          types.DefaultWireGuardPort,
 			MTU:           1420,
+			Enabled:       true,
+		},
+		Metrics: types.MetricsConfig{
+			Enabled:        true,
+			PrometheusPort: types.DefaultClientMetrics,
 		},
 	}
 
@@ -296,9 +325,9 @@ func (w *SetupWizard) configureAdvanced(cfg *types.Config) error {
 		cfg.P2P.MaxConnections = maxConns
 	}
 
-	// Metrics
+	// Metrics (local client exporter — not relay :5551)
 	if w.promptYesNo("Configure metrics?", false) {
-		metricsPort, err := w.promptInt("Metrics port", 9090, 1024, 65535)
+		metricsPort, err := w.promptInt("Client metrics port", types.DefaultClientMetrics, 1024, 65535)
 		if err != nil {
 			return err
 		}
@@ -407,29 +436,71 @@ func extractTokenFromInput(input string) string {
 
 
 func fillDefaults(cfg *types.Config, host string, tenantID string) {
-	// Relay defaults
+	// Relay defaults — role-specific ports (CONTRACT_CLIENT_RELAY)
+	if cfg.Relay.Port <= 0 {
+		cfg.Relay.Port = types.DefaultLegacyTCPPort
+	}
+	if cfg.Relay.Ports.P2PAPI <= 0 {
+		cfg.Relay.Ports.P2PAPI = types.DefaultP2PAPIPort
+	}
+	if cfg.Relay.Ports.GRPC <= 0 {
+		cfg.Relay.Ports.GRPC = types.DefaultGRPCPort
+	}
+	if cfg.Relay.Ports.QUIC <= 0 {
+		cfg.Relay.Ports.QUIC = types.DefaultP2PQUICPort
+	}
+	if cfg.Relay.Ports.HTTPAPI <= 0 {
+		cfg.Relay.Ports.HTTPAPI = types.DefaultHTTPAPIPort
+	}
+	if cfg.Relay.Ports.HTTPSAPI <= 0 {
+		cfg.Relay.Ports.HTTPSAPI = types.DefaultHTTPSAPIPort
+	}
+	if cfg.Relay.Ports.QUICMain <= 0 {
+		cfg.Relay.Ports.QUICMain = types.DefaultQUICMainPort
+	}
+	if cfg.Relay.Ports.STUN <= 0 {
+		cfg.Relay.Ports.STUN = types.DefaultSTUNPort
+	}
+	if cfg.Relay.Ports.TURN <= 0 {
+		cfg.Relay.Ports.TURN = types.DefaultTURNPort
+	}
+	if cfg.Relay.Ports.DERP <= 0 {
+		cfg.Relay.Ports.DERP = types.DefaultDERPPort
+	}
+	if cfg.Relay.Ports.MASQUE <= 0 {
+		cfg.Relay.Ports.MASQUE = types.DefaultMASQUEPort
+	}
+	if cfg.Relay.Ports.EnhancedQUIC <= 0 {
+		cfg.Relay.Ports.EnhancedQUIC = types.DefaultEnhancedQUIC
+	}
 	if cfg.Relay.TLS.ServerName == "" {
 		cfg.Relay.TLS.ServerName = host
 	}
 
+	p2pAPI := cfg.EffectiveP2PAPIPort()
+
 	// ICE/STUN/TURN
 	if len(cfg.ICE.STUNServers) == 0 {
 		cfg.ICE.STUNServers = []string{
+			fmt.Sprintf("%s:%d", host, types.DefaultSTUNPort),
 			"stun.l.google.com:19302",
 			"stun1.l.google.com:19302",
 		}
+	}
+	if len(cfg.ICE.TURNServers) == 0 {
+		cfg.ICE.TURNServers = []string{fmt.Sprintf("%s:%d", host, types.DefaultTURNPort)}
 	}
 	if cfg.ICE.Timeout == 0 {
 		cfg.ICE.Timeout = 30 * time.Second
 	}
 
-	// WebSocket
+	// WebSocket on REST API port (not QUIC UDP)
 	if cfg.WebSocket.Endpoint == "" {
 		protocol := "wss"
 		if !cfg.Relay.TLS.Enabled {
 			protocol = "ws"
 		}
-		cfg.WebSocket.Endpoint = fmt.Sprintf("%s://%s:%d/ws/peers", protocol, host, cfg.Relay.Port)
+		cfg.WebSocket.Endpoint = fmt.Sprintf("%s://%s:%d/ws", protocol, host, p2pAPI)
 	}
 	if cfg.WebSocket.Timeout == 0 {
 		cfg.WebSocket.Timeout = 30 * time.Second
@@ -439,19 +510,20 @@ func fillDefaults(cfg *types.Config, host string, tenantID string) {
 	}
 	cfg.WebSocket.Enabled = true
 
-	// API
+	// API base = P2P REST :5552
 	protocol := "https"
 	if !cfg.Relay.TLS.Enabled {
 		protocol = "http"
 	}
+	base := fmt.Sprintf("%s://%s:%d", protocol, host, p2pAPI)
 	if cfg.API.BaseURL == "" {
-		cfg.API.BaseURL = fmt.Sprintf("%s://%s:%d", protocol, host, cfg.Relay.Port)
+		cfg.API.BaseURL = base
 	}
 	if cfg.API.P2PAPIURL == "" {
-		cfg.API.P2PAPIURL = fmt.Sprintf("%s://%s:%d/api", protocol, host, cfg.Relay.Port)
+		cfg.API.P2PAPIURL = base
 	}
 	if cfg.API.HeartbeatURL == "" {
-		cfg.API.HeartbeatURL = fmt.Sprintf("%s://%s:%d/api/v1/tenants/%s/peers/register", protocol, host, cfg.Relay.Port, tenantID)
+		cfg.API.HeartbeatURL = base
 	}
 	if cfg.API.Timeout == 0 {
 		cfg.API.Timeout = 30 * time.Second
@@ -483,10 +555,13 @@ func fillDefaults(cfg *types.Config, host string, tenantID string) {
 	if cfg.WireGuard.MTU == 0 {
 		cfg.WireGuard.MTU = 1420
 	}
+	if cfg.WireGuard.Port <= 0 {
+		cfg.WireGuard.Port = types.DefaultWireGuardPort
+	}
 
-	// Metrics defaults
+	// Metrics — local client exporter (canonical 9091)
 	if cfg.Metrics.PrometheusPort == 0 {
-		cfg.Metrics.PrometheusPort = 9090
+		cfg.Metrics.PrometheusPort = types.DefaultClientMetrics
 	}
 }
 

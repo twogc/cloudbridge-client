@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/twogc/cloudbridge-client/pkg/types"
 )
 
 func TestValidateToken_Success(t *testing.T) {
@@ -134,18 +136,32 @@ func TestJoin_Success(t *testing.T) {
 		t.Errorf("Expected tenant ID 'tenant-001', got '%s'", joinResp.TenantID)
 	}
 
-	// Check generated config
+	// Check generated config (canonical ports: docs/CONTRACT_CLIENT_RELAY.md)
 	if cfg.Relay.Host != "edge.2gc.ru" {
 		t.Errorf("Expected relay host 'edge.2gc.ru', got '%s'", cfg.Relay.Host)
+	}
+	if cfg.Relay.Port != types.DefaultLegacyTCPPort {
+		t.Errorf("Expected legacy TCP port %d, got %d", types.DefaultLegacyTCPPort, cfg.Relay.Port)
+	}
+	if cfg.EffectiveP2PAPIPort() != types.DefaultP2PAPIPort {
+		t.Errorf("Expected p2p_api %d, got %d", types.DefaultP2PAPIPort, cfg.EffectiveP2PAPIPort())
+	}
+	if cfg.EffectiveGRPCPort() != types.DefaultGRPCPort {
+		t.Errorf("Expected grpc %d, got %d", types.DefaultGRPCPort, cfg.EffectiveGRPCPort())
+	}
+	if cfg.EffectiveP2PQUICPort() != types.DefaultP2PQUICPort {
+		t.Errorf("Expected quic %d, got %d", types.DefaultP2PQUICPort, cfg.EffectiveP2PQUICPort())
+	}
+	if cfg.API.BaseURL != "https://edge.2gc.ru:5552" {
+		t.Errorf("Expected API base https://edge.2gc.ru:5552, got %q", cfg.API.BaseURL)
+	}
+	if cfg.GRPCTarget() != "edge.2gc.ru:8444" {
+		t.Errorf("GRPCTarget: %q", cfg.GRPCTarget())
 	}
 
 	if cfg.Auth.Token != "jwt-token-here" {
 		t.Errorf("Expected auth token 'jwt-token-here', got '%s'", cfg.Auth.Token)
 	}
-
-	// Device ID and Tenant ID should be in the join response
-	// The config structure doesn't have ServerID and TenantID in P2P config
-	// These are returned in the join response
 }
 
 func TestJoin_InvalidToken(t *testing.T) {

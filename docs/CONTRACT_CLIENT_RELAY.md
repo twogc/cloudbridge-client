@@ -1,0 +1,126 @@
+# Contract: cloudbridge-client ↔ cloudbridge-relay
+
+**Status:** Canonical (client side)  
+**Date:** 2026-07-09  
+**Server SoT:** `cloudbridge-relay-installer/openwiki/port-scheme.md`  
+**Client implementation plan:** [plans/CONTRACT_ALIGNMENT_PLAN.md](plans/CONTRACT_ALIGNMENT_PLAN.md)
+
+Host placeholder: `{relay}` (default prod example: `edge.2gc.ru`).
+
+---
+
+## 1. L4 listeners (relay) and client dial
+
+| Role | Port | Protocol | Relay source | Client config key | Client dial helper |
+|------|-----:|----------|--------------|-------------------|--------------------|
+| Main TCP (legacy control) | **5550** | TCP (+TLS) | `server.port` | `relay.port` (legacy) | `LegacyTCPAddr()` |
+| P2P REST API | **5552** | TCP / HTTPS | `api.port` | `relay.ports.p2p_api` | `P2PAPIBaseURL()` |
+| HTTPS API | **5553** | TCP / TLS | `https_api.port` | `relay.ports.https_api` | optional |
+| P2P QUIC | **5553** | **UDP** | hardcoded | `relay.ports.quic` | `P2PQUICAddr()` |
+| HTTP API (health/REST) | **9090** | TCP | `http_api.port` | `relay.ports.http_api` | optional HTTP base |
+| Main QUIC | **9090** | **UDP** | hardcoded | `relay.ports.quic_main` | `QUICMainAddr()` |
+| Enhanced QUIC | **9092** | UDP | hardcoded | `relay.ports.enhanced_quic` | optional |
+| Relay metrics | **5551** | TCP | `metrics.port` | (scrape only) | — |
+| Health / TLS tunnel | **9091** | TCP | `https.go` | — | do not confuse with client metrics |
+| gRPC control | **8444** | TCP / gRPC | `grpc.port` | `relay.ports.grpc` | `GRPCTarget()` |
+| MASQUE HTTP/3 | **8443** | TCP/UDP H3 | masque | `relay.ports.masque` | **UNWIRED** in client orchestrator |
+| STUN | **19302** | UDP | hardcoded | `ice.stun_servers` / `ports.stun` | ICE |
+| TURN | **3478** | UDP/TCP | built-in/coturn | `ice.turn_servers` / `ports.turn` | ICE |
+| DERP | **3479** | UDP | hardcoded | `ice.derp_servers` / `ports.derp` | ICE |
+| WireGuard | **51820** | UDP | wireguard | `wireguard.port` | local + peer |
+
+### Hard rules
+
+1. **Never** dial gRPC on `relay.port` if that port is used for QUIC UDP (5553).
+2. **Never** treat **5553** as the default **HTTPS REST** base; REST = **5552**, P2P QUIC = **5553/UDP**, HTTPS API TCP = **5553** only when explicitly using `https_api`.
+3. Client local Prometheus default = **9091** (not relay metrics 5551, not host Prometheus 9090).
+
+---
+
+## 2. REST control plane (aligned paths)
+
+**Base (canonical):** `https://{relay}:5552`
+
+| Method | Path | Status |
+|--------|------|--------|
+| GET | `/health` | OK on relay P2P API |
+| GET | `/ready` | OK |
+| POST | `/api/v1/tenants/:tid/peers/register` | OK both sides |
+| GET | `/api/v1/tenants/:tid/peers` | Relay list; client may still use `/peers/discover` → **PATH drift** |
+| GET | `/api/v1/p2p/discover` | Relay |
+| PUT | `/api/v1/tenants/:tid/peers/:pid/status` | OK shape |
+| POST | `/api/v1/tenants/:tid/peers/:pid/heartbeat` | OK shape (mount verify e2e) |
+| GET | `/api/v1/tenants/:tid/peers/:pid/wireguard-config` | OK shape |
+| POST | `/api/v1/relay/route` | Relay; client `connections/*` → **PATH drift** |
+| GET/POST | `/api/v1/wireguard/*` | Often on HTTP mux **9090** — dual-base if 404 on 5552 |
+| WSS | `/ws` | Prefer via API/ingress, not “5553 as HTTPS” |
+
+### Known missing / deferred (PR-4)
+
+| Client path | Relay | Action |
+|-------------|-------|--------|
+| `…/ice-credentials` | not found | implement on relay **or** disable client |
+| `/api/v1/ice/candidates` | not found | same |
+| `/api/v1/p2p/connect` | not found | same |
+| `/api/v1/relay/connections/{open,close,heartbeat}` | not found (use `/relay/route`) | map or deprecate |
+
+---
+
+## 3. gRPC control plane
+
+**Target:** `{relay}:8444`
+
+| Service | RPCs |
+|---------|------|
+| `ControlService` | Hello, Authenticate, GetStatus |
+| `HeartbeatService` | SendHeartbeat, StreamHeartbeat, GetHealth |
+| `TunnelService` | CreateTunnel, CloseTunnel, ListTunnels, GetTunnelStatus, StreamData |
+
+Client protos: `pkg/relay/transport/proto/`.
+
+CLI default: `--transport grpc`.
+
+---
+
+## 4. Data plane
+
+| Flow | Endpoint | Notes |
+|------|----------|-------|
+| P2P QUIC to relay | `{relay}:5553` UDP | Auth stream `AUTH <token>` (verify e2e) |
+| Main QUIC | `{relay}:9090` UDP | Optional primary after align |
+| Peer QUIC after ICE | dynamic | STUN/TURN required |
+| WireGuard overlay | 51820 UDP | Needs API config fetch |
+| MASQUE | 8443 | Package exists; orchestrator **nil** |
+
+---
+
+## 5. Auth
+
+| Mode | Client | Relay (post-cleanup) |
+|------|--------|----------------------|
+| OIDC / JWKS (Zitadel) | `auth.type=oidc` | Canonical |
+| JWT HMAC secret | `auth.type=jwt` | Legacy; may not match Zitadel-issued tokens |
+| Claims | `tenant_id`, `org_id`, `permissions`, network/mesh | Align field names with relay `RelayClaims` |
+
+Onboarding invites → **control plane** (`/api/v1/invites/*`), not relay.
+
+---
+
+## 6. Status legend (matrix work)
+
+| Tag | Meaning |
+|-----|---------|
+| OK | Aligned |
+| PORT | Wrong port/base |
+| PATH | Path mismatch |
+| MISSING | No server route |
+| UNWIRED | Code not hooked |
+| DOCS | Docs only |
+
+---
+
+## 7. Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-07-09 | Initial contract from dual-repo analysis; PR-1 alignment started |

@@ -1,5 +1,19 @@
 # Configuration and authentication
 
+## Canonical ports and bases
+
+See **[docs/CONTRACT_CLIENT_RELAY.md](../../docs/CONTRACT_CLIENT_RELAY.md)** for the full client↔relay contract.
+
+| Purpose | Default |
+|---------|---------|
+| REST / P2P API base | `https://{host}:5552` (`api.base_url`, `relay.ports.p2p_api`) |
+| gRPC | `{host}:8444` (`relay.ports.grpc`) |
+| P2P QUIC | `{host}:5553` UDP (`relay.ports.quic`) |
+| Client metrics | `:9091` local |
+| Env prefix | `CLOUDBRIDGE_` |
+
+Helpers (after WP1): `P2PAPIBaseURL()`, `GRPCTarget()`, `P2PQUICAddr()` on `*types.Config`.
+
 ## Configuration loading
 
 `pkg/config/config.go` uses Viper to load settings from:
@@ -10,14 +24,14 @@
 - `$HOME/.cloudbridge-client`
 - an explicit path passed on the CLI
 
-It also reads environment variables with the `CLOUDBRIDGE_` prefix and fills in a large set of defaults.
+It also reads environment variables with the `CLOUDBRIDGE_` prefix and fills defaults from `setDefaults()`.
 
 ## Validation behavior
 
 The loader validates key runtime assumptions, including:
 
 - relay host and port
-- TLS version requirements
+- TLS version requirements (TLS 1.3 when enabled)
 - CA certificate file existence when specified
 - consistency between client certificate and key
 - auth requirements for JWT and OIDC
@@ -27,26 +41,30 @@ The loader validates key runtime assumptions, including:
 
 `pkg/auth/auth.go` supports two main modes:
 
-- `jwt` — validates JWTs using a secret, which may be plain text or base64-encoded
-- `oidc` — performs OIDC discovery and loads JWKS for token verification
+- `jwt` — validates JWTs using a secret (plain text or base64)
+- `oidc` — OIDC discovery + JWKS (Zitadel-ready)
 
-The auth layer includes claim types for tenant ID, org ID, permissions, network config, mesh config, and peer whitelists.
+Claims include tenant ID, org ID, permissions, network config, mesh config, and peer whitelists.
 
-## Onboarding and wizard flow
+**Production path with current relay:** prefer **OIDC/Zitadel-issued JWT**. HMAC `jwt` secret mode is for legacy/dev and may not validate server-issued tokens.
 
-- `pkg/onboarding/onboarding.go` validates invite tokens and redeems them with the control plane before generating a config.
-- `pkg/wizard/wizard.go` offers interactive setup paths for invite, manual JWT, and OIDC-based configuration.
+## Onboarding and wizard
 
-## Important caveats
+- `pkg/onboarding/onboarding.go` — invite validate/redeem against **control plane**, then generates config
+- `pkg/wizard/wizard.go` — interactive invite / manual JWT / OIDC setup
 
-- The repository’s docs and source contain several environment-specific default URLs and ports; treat them as deployment-specific unless you verify them against your environment.
-- OIDC support depends on discovery/JWKS availability and an issuer/audience pair that matches the deployment.
-- The wizard and config loader do not use the same defaults in every case, so future changes should check both paths.
+Wizard and config loader defaults must both match [CONTRACT_CLIENT_RELAY.md](../../docs/CONTRACT_CLIENT_RELAY.md) (WP3).
+
+## Caveats
+
+- Do not use obsolete README port **8081**.
+- Do not dial gRPC on the QUIC UDP port (5553).
+- `relay.tls.server_name` may differ from `relay.host` (cert SAN); set explicitly per environment.
 
 ## Source references
 
 - `pkg/config/config.go`
-- `pkg/config/watcher.go`
+- `pkg/types/types.go`, `pkg/types/addrs.go`
 - `pkg/auth/auth.go`
 - `pkg/onboarding/onboarding.go`
 - `pkg/wizard/wizard.go`

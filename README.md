@@ -2,132 +2,121 @@
 
 Cross-platform client for CloudBridge Relay P2P mesh networking.
 
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| **[docs/README.md](docs/README.md)** | Full documentation index |
+| **[docs/CONTRACT_CLIENT_RELAY.md](docs/CONTRACT_CLIENT_RELAY.md)** | Canonical ports & API contract vs relay |
+| **[docs/CHECKLISTS.md](docs/CHECKLISTS.md)** | Build / test / smoke checklists |
+| **[docs/STATUS.md](docs/STATUS.md)** | Current maturity (honest) |
+| [openwiki/quickstart.md](openwiki/quickstart.md) | Agent / developer map |
+
 ## Quick Start
 
-1. **Get JWT Token**: Contact your CloudBridge Relay administrator for a JWT token.
+1. **Get a token** from your CloudBridge operator (Zitadel/OIDC JWT preferred).
 
-2. **Configure**: Copy `config-example.yaml` to `config.yaml` and update:
+2. **Configure** — copy and edit config (see also defaults in `pkg/config`):
+
    ```yaml
    relay:
-     host: "your-relay-server.com"
-     port: 8081
-   
+     host: "your-relay-server.example"
+     port: 5550                    # legacy main TCP
+     ports:
+       p2p_api: 5552               # REST
+       grpc: 8444
+       quic: 5553                  # P2P QUIC (UDP)
+       http_api: 9090
+       quic_main: 9090             # main QUIC (UDP)
+       masque: 8443
+       stun: 19302
+       turn: 3478
+   api:
+     base_url: "https://your-relay-server.example:5552"
+     p2p_api_url: "https://your-relay-server.example:5552"
+     heartbeat_url: "https://your-relay-server.example:5552"
    auth:
+     type: "oidc"                  # or "jwt" for legacy HMAC
      token: "YOUR_JWT_TOKEN_HERE"
-   
+     # oidc: issuer_url, audience, jwks_url as needed
    p2p:
      server_id: "my-server-001"
      tenant_id: "my-organization"
    ```
 
 3. **Run**:
+
    ```bash
-   # P2P mesh mode with L3-overlay network
-   ./cloudbridge-client p2p --config config.yaml --server-id my-server-001
-   
+   # P2P mesh (prefer gRPC control plane)
+   ./cloudbridge-client p2p --config config.yaml --token "$TOKEN" --transport grpc
+
    # Tunnel mode
-   ./cloudbridge-client tunnel --config config.yaml --local-port 3389 --remote-host target.com --remote-port 3389
-   
-   # WireGuard L3-overlay network management
-   ./cloudbridge-client wireguard config --config config.yaml --token YOUR_JWT_TOKEN
-   ./cloudbridge-client wireguard status --config config.yaml --token YOUR_JWT_TOKEN
+   ./cloudbridge-client tunnel --config config.yaml --token "$TOKEN" \
+     --local-port 3389 --remote-host target.example --remote-port 3389
+
+   # WireGuard L3-overlay helpers
+   ./cloudbridge-client wireguard config --config config.yaml --token "$TOKEN"
+   ./cloudbridge-client wireguard status --config config.yaml --token "$TOKEN"
    ```
 
-## Security & Secrets
+## Canonical ports (client ↔ relay)
 
-**Production Security Best Practices:**
+| Role | Port | Protocol |
+|------|-----:|----------|
+| P2P REST API | **5552** | TCP / HTTPS |
+| gRPC control | **8444** | TCP |
+| P2P QUIC | **5553** | UDP |
+| Main QUIC | **9090** | UDP |
+| STUN | **19302** | UDP |
+| TURN | **3478** | UDP/TCP |
+| WireGuard | **51820** | UDP |
+| Client metrics (local) | **9091** | TCP |
 
-1. **Environment Variables** (Recommended):
+Full matrix and path status: [docs/CONTRACT_CLIENT_RELAY.md](docs/CONTRACT_CLIENT_RELAY.md).
+
+> **Obsolete:** older docs used port **8081** — do not use.
+
+## Security & secrets
+
+1. **Environment** (Viper prefix `CLOUDBRIDGE_`):
+
    ```bash
-   export CBR_AUTH_TOKEN="your-jwt-token"
-   export CBR_RELAY_HOST="your-relay-server.com"
-   export CBR_RELAY_PORT="8081"
-   ./cloudbridge-client p2p --config config.yaml
+   export CLOUDBRIDGE_RELAY_HOST="your-relay-server.example"
+   # token often passed via --token or auth.token in a 0600 config file
+   ./cloudbridge-client p2p --config config.yaml --token "$TOKEN"
    ```
 
-2. **OS Keyring Integration**:
-   - **Windows**: Uses Windows Credential Manager
-   - **macOS**: Uses Keychain Access
-   - **Linux**: Uses libsecret (GNOME Keyring/KDE Wallet)
+2. **File permissions:** `chmod 600 config.yaml`
 
-3. **File Permissions**:
-   ```bash
-   chmod 600 config.yaml  # Restrict config file access
-   chown $USER:$USER config.yaml
-   ```
+3. **Tokens:** short-lived JWT; prefer OIDC/Zitadel in production.
 
-4. **Token Rotation**:
-   - Use short-lived JWT tokens (1-24 hours)
-   - Implement automatic token refresh
-   - Rotate tokens regularly
+4. **OS keyring:** optional patterns in packaging docs; validate for your OS.
 
-## Verify Release
+## Transport protocols
 
-**Before running, verify the release integrity:**
-
-1. **Download checksums**:
-   ```bash
-   curl -L https://github.com/twogc/cloudbridge-client/releases/latest/download/checksums.txt
-   ```
-
-2. **Verify binary**:
-   ```bash
-   sha256sum -c checksums.txt
-   ```
-
-3. **Verify signature** (if available):
-   ```bash
-   cosign verify-blob --certificate-identity="*" --certificate-oidc-issuer="*" \
-     --signature cloudbridge-client-linux-amd64.sig cloudbridge-client-linux-amd64
-   ```
-
-## Configuration Files
-
-- `config-example.yaml` - Configuration template
-- `config-production.yaml` - Production template for edge.2gc.ru
-- `config.yaml` - Your configuration (create from example)
-
-## Transport Protocols
-
-- **QUIC** - Primary high-performance transport
-- **WebSocket** - Fallback for restricted networks
-- **gRPC** - API communication
-- **WireGuard** - L3-overlay network support
-
-## L3-overlay Network Features
-
-- **Per-peer IPAM** - Automatic IP address allocation for each peer
-- **WireGuard Integration** - Ready-to-use WireGuard configurations
-- **Tenant Isolation** - Complete network isolation between tenants
-- **Hybrid Architecture** - SCORE for tenant subnets, local DB for per-peer IPs
-- **Event-driven Sync** - Real-time configuration updates
+- **gRPC** — preferred control plane (`--transport grpc`, port 8444)
+- **QUIC** — P2P / data plane
+- **WebSocket** — fallback (when enabled)
+- **WireGuard** — L3-overlay
+- **MASQUE** — code present, **not wired** in orchestrator (see STATUS)
 
 ## Build
 
 ```bash
-make build          # Current platform
-make build-all      # Cross-platform
+make build          # current platform
+make build-all      # cross-platform
 make build-windows  # Windows
 ```
 
-## Requirements
+Requirements: Go 1.25+, network access to relay, valid token.
 
-- Go 1.25+
-- Valid JWT token from CloudBridge Relay
-- Network access to relay server
+## Verify release (if published)
+
+```bash
+curl -L https://github.com/twogc/cloudbridge-client/releases/latest/download/checksums.txt
+sha256sum -c checksums.txt
+```
 
 ## License
 
-Copyright 2025 2GC
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright 2025 2GC — Apache License 2.0. See [LICENSE](LICENSE).

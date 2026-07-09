@@ -241,13 +241,29 @@ func (m *OnboardingManager) generateConfig(joinResp *JoinResponse) (*types.Confi
 		return nil, fmt.Errorf("no device_id or user_id in response")
 	}
 
+	// Canonical ports: docs/CONTRACT_CLIENT_RELAY.md
+	apiBase := fmt.Sprintf("https://%s:%d", relayHost, types.DefaultP2PAPIPort)
 	cfg := &types.Config{
 		Relay: types.RelayConfig{
 			Host: relayHost,
-			Port: 5552,
+			Port: types.DefaultLegacyTCPPort,
+			Ports: types.RelayPorts{
+				HTTPAPI:      types.DefaultHTTPAPIPort,
+				HTTPSAPI:     types.DefaultHTTPSAPIPort,
+				P2PAPI:       types.DefaultP2PAPIPort,
+				QUIC:         types.DefaultP2PQUICPort,
+				QUICMain:     types.DefaultQUICMainPort,
+				GRPC:         types.DefaultGRPCPort,
+				STUN:         types.DefaultSTUNPort,
+				MASQUE:       types.DefaultMASQUEPort,
+				EnhancedQUIC: types.DefaultEnhancedQUIC,
+				TURN:         types.DefaultTURNPort,
+				DERP:         types.DefaultDERPPort,
+			},
 			TLS: types.TLSConfig{
 				Enabled:    true,
 				VerifyCert: true,
+				ServerName: relayHost,
 			},
 		},
 		Auth: types.AuthConfig{
@@ -255,21 +271,38 @@ func (m *OnboardingManager) generateConfig(joinResp *JoinResponse) (*types.Confi
 			Token: joinResp.Credentials.Token,
 		},
 		P2P: types.P2PConfig{
-			MaxConnections: 100,
+			MaxConnections:    100,
 			HeartbeatInterval: 30 * time.Second,
 		},
 		ICE: types.ICEConfig{
 			STUNServers: []string{
+				fmt.Sprintf("%s:%d", relayHost, types.DefaultSTUNPort),
 				"stun.l.google.com:19302",
 				"stun1.l.google.com:19302",
 			},
+			TURNServers: []string{
+				fmt.Sprintf("%s:%d", relayHost, types.DefaultTURNPort),
+			},
 		},
 		WebSocket: types.WebSocketConfig{
-			Enabled: true,
+			Enabled:  true,
+			Endpoint: fmt.Sprintf("wss://%s:%d/ws", relayHost, types.DefaultP2PAPIPort),
 		},
 		API: types.APIConfig{
-			BaseURL: fmt.Sprintf("https://%s:5552", relayHost),
-			Timeout: 30 * time.Second,
+			BaseURL:      apiBase,
+			P2PAPIURL:    apiBase,
+			HeartbeatURL: apiBase,
+			Timeout:      30 * time.Second,
+		},
+		WireGuard: types.WireGuardConfig{
+			Enabled:       true,
+			InterfaceName: "wg-cloudbridge",
+			Port:          types.DefaultWireGuardPort,
+			MTU:           1420,
+		},
+		Metrics: types.MetricsConfig{
+			Enabled:        true,
+			PrometheusPort: types.DefaultClientMetrics,
 		},
 		Logging: types.LoggingConfig{
 			Level:  "info",

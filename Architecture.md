@@ -1,5 +1,12 @@
 # CloudBridge Client Architecture
 
+> **Operational truth:** ports, API contract, and maturity live in  
+> [`docs/CONTRACT_CLIENT_RELAY.md`](docs/CONTRACT_CLIENT_RELAY.md),  
+> [`docs/STATUS.md`](docs/STATUS.md), and [`docs/CHECKLISTS.md`](docs/CHECKLISTS.md).  
+> Sections below describe the **intended** architecture. Features such as MASQUE,
+> connection handover, and SLO controllers exist as packages but may be **UNWIRED**
+> in `pkg/relay.Client` — confirm STATUS before treating them as GA.
+
 ## Overview
 
 CloudBridge Client is a cross-platform P2P mesh networking client that enables secure, high-performance peer-to-peer connections through relay servers. The architecture is designed for enterprise-grade reliability, security, and performance.

@@ -119,3 +119,7 @@ make build-windows  # Windows
 ## License
 
 See LICENSE file for details.
+
+## Port contract
+
+See [`docs/CONTRACT_CLIENT_RELAY.md`](../docs/CONTRACT_CLIENT_RELAY.md). Template `config.yaml` in this directory matches REST **5552**, gRPC **8444**, P2P QUIC **5553** UDP.
